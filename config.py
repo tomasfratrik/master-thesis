@@ -11,6 +11,7 @@ ARTIFACTS.mkdir(exist_ok=True)
 
 # Model
 MODEL_NAME = "ViT-B/32"
+#MODEL_NAME = "ViT-L/14"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Embedding files (per-image & per-class)
