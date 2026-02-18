@@ -1,7 +1,8 @@
 import torch
-import clip
 from pathlib import Path
 from PIL import Image
+from config import MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
+from model_loader import load_model
 
 def load_finetuned_model(checkpoint_path, device="cuda" if torch.cuda.is_available() else "cpu"):
     """
@@ -15,8 +16,8 @@ def load_finetuned_model(checkpoint_path, device="cuda" if torch.cuda.is_availab
         model: Fine-tuned CLIP model
         preprocess: CLIP preprocessing function
     """
-    # Load base model
-    model, preprocess = clip.load("ViT-B/32", device=device, jit=False)
+    # Load base model (no fine-tuned weights yet)
+    model, preprocess = load_model(use_checkpoint=False)
 
     # Load checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=device)
@@ -68,22 +69,26 @@ if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load fine-tuned model
-    checkpoint_path = Path("artifacts/finetuned_models/clip_nike_best.pt")
+    if MODEL_CHECKPOINT is None:
+        print("MODEL_CHECKPOINT is not set in config.py")
+        exit(1)
+    checkpoint_path = Path(MODEL_CHECKPOINT)
 
     if not checkpoint_path.exists():
         print(f"Checkpoint not found at {checkpoint_path}")
-        print("Please train the model first using: python finetune_clip_nike.py")
+        print("Please train the model first using: python finetune_clip.py")
         exit(1)
 
+    if not MODEL_USE_CHECKPOINT:
+        print("NOTE: MODEL_USE_CHECKPOINT is False. Set it to True in config.py to use checkpoint weights.")
     model, preprocess = load_finetuned_model(checkpoint_path, device)
 
-    # Test on a sample Nike image
+    # Test on a sample sneaker image
     test_image = Path("sneakers-dataset/nike_air_force_1_low/0001.jpg")
 
     if test_image.exists():
         # IMPORTANT: These text queries must match the format used during training
-        # Training uses: nike_dir.name.replace('_', ' ').replace('nike ', '').title()
-        # This removes "nike " prefix and title-cases the rest
+        # Training uses: class_dir.name.replace('_', ' ').title()
         text_queries = [
             "a photo of Air Force 1 Low sneakers",
             "a photo of Air Jordan 1 High sneakers",

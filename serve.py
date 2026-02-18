@@ -2,15 +2,16 @@
 import io, json
 from typing import List
 import numpy as np
-import torch, clip, faiss
+import torch, faiss
 from PIL import Image
 from fastapi import FastAPI, File, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import (
-    MODEL_NAME, DEVICE, FAISS_INDEX, CLS_META_JSON
+    DEVICE, FAISS_INDEX, CLS_META_JSON
 )
+from model_loader import load_model
 
 app = FastAPI(title="Sneaker Visual Search (Per-Class)")
 
@@ -22,8 +23,7 @@ app.add_middleware(
 )
 
 # Load model once
-model, preprocess = clip.load(MODEL_NAME, device=DEVICE, jit=False)
-model.eval()
+model, preprocess = load_model()
 
 # Load FAISS index + metadata
 index = faiss.read_index(str(FAISS_INDEX))
@@ -62,4 +62,3 @@ async def search(
         })
 
     return JSONResponse({"results": results})
-

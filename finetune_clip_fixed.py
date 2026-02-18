@@ -8,10 +8,11 @@ from pathlib import Path
 from tqdm import tqdm
 import json
 
-# Configuration
-BATCH_SIZE = 16
-EPOCH = 10
-LEARNING_RATE = 5e-5
+# Configuration - FIXED HYPERPARAMETERS
+BATCH_SIZE = 32  # Increased from 16
+EPOCH = 30  # Increased from 10
+LEARNING_RATE = 1e-6  # MUCH lower - was 5e-5 (50x reduction!)
+WARMUP_EPOCHS = 3
 MODEL_NAME = "ViT-B/32"
 DATASET_ROOT = Path("sneakers-dataset")
 OUTPUT_DIR = Path("artifacts/finetuned_models")
@@ -23,8 +24,12 @@ print(f"Using device: {device}")
 # Load CLIP model
 model, preprocess = clip.load(MODEL_NAME, device=device, jit=False)
 
-class NikeSneakerDataset(Dataset):
-    """Dataset for Nike sneakers with image-text pairs"""
+class SneakerDataset(Dataset):
+    """Dataset for sneakers with image-text pairs.
+
+    Discovers any directory that directly contains image files and uses that
+    directory name as the class label.
+    """
 
     def __init__(self, dataset_root, preprocess):
         self.dataset_root = Path(dataset_root)
@@ -32,18 +37,25 @@ class NikeSneakerDataset(Dataset):
         self.image_paths = []
         self.texts = []
 
-        # Collect all Nike shoe images
-        nike_dirs = sorted([d for d in self.dataset_root.iterdir()
-                           if d.is_dir() and d.name.startswith('nike_')])
+        # Discover class directories (any dir that directly contains images)
+        image_exts = {".jpg", ".jpeg", ".png", ".webp"}
+        class_dirs = sorted({
+            p.parent
+            for p in self.dataset_root.rglob("*")
+            if p.is_file() and p.suffix.lower() in image_exts
+        })
 
-        print(f"Found {len(nike_dirs)} Nike shoe categories")
+        print(f"Found {len(class_dirs)} sneaker categories")
 
-        for nike_dir in nike_dirs:
-            # Extract readable class name
-            class_name = nike_dir.name.replace('_', ' ').replace('nike ', '').title()
+        for class_dir in class_dirs:
+            # Extract readable class name from directory containing images
+            class_name = class_dir.name.replace('_', ' ').title()
 
-            # Get all images in this directory
-            image_files = list(nike_dir.glob('*.jpg')) + list(nike_dir.glob('*.png'))
+            # Get all images directly in this directory
+            image_files = [
+                p for p in class_dir.iterdir()
+                if p.is_file() and p.suffix.lower() in image_exts
+            ]
 
             for img_path in image_files:
                 self.image_paths.append(img_path)
@@ -54,7 +66,7 @@ class NikeSneakerDataset(Dataset):
         # Tokenize all texts at once
         self.tokenized_texts = clip.tokenize(self.texts)
 
-        print(f"Total Nike images: {len(self.image_paths)}")
+        print(f"Total images: {len(self.image_paths)}")
         print(f"Sample texts: {self.texts[:3]}")
 
     def __len__(self):
@@ -79,7 +91,7 @@ def convert_models_to_fp32(model):
 
 def train():
     # Create dataset and dataloader
-    dataset = NikeSneakerDataset(DATASET_ROOT, preprocess)
+    dataset = SneakerDataset(DATASET_ROOT, preprocess)
     train_dataloader = DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
@@ -98,18 +110,35 @@ def train():
     loss_img = nn.CrossEntropyLoss()
     loss_txt = nn.CrossEntropyLoss()
 
-    # Optimizer from paper
+    # FIXED: Much lower learning rate and no weight decay
     optimizer = optim.Adam(
         model.parameters(),
         lr=LEARNING_RATE,
         betas=(0.9, 0.98),
         eps=1e-6,
-        weight_decay=0.2
+        weight_decay=0.001  # Reduced from 0.2 to 0.001
     )
+
+    # Learning rate scheduler with warmup
+    def get_lr(epoch):
+        if epoch < WARMUP_EPOCHS:
+            return (epoch + 1) / WARMUP_EPOCHS
+        return 1.0
+
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=get_lr)
 
     # Training loop
     best_loss = float('inf')
     training_history = []
+
+    print("\n" + "="*70)
+    print("FIXED TRAINING CONFIGURATION:")
+    print(f"  Learning Rate: {LEARNING_RATE} (was 5e-5 - now 50x lower!)")
+    print(f"  Weight Decay: 0.001 (was 0.2 - now 200x lower!)")
+    print(f"  Batch Size: {BATCH_SIZE} (was 16)")
+    print(f"  Epochs: {EPOCH} (was 10)")
+    print(f"  Warmup Epochs: {WARMUP_EPOCHS}")
+    print("="*70 + "\n")
 
     for epoch in range(EPOCH):
         model.train()
@@ -138,6 +167,9 @@ def train():
             # Backward pass
             total_loss.backward()
 
+            # Clip gradients to prevent explosion
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
             # Optimizer step with FP32 conversion if on GPU
             if device == "cpu":
                 optimizer.step()
@@ -151,41 +183,48 @@ def train():
             batch_count += 1
 
             # Update progress bar
-            progress_bar.set_postfix({'loss': total_loss.item()})
+            current_lr = optimizer.param_groups[0]['lr']
+            progress_bar.set_postfix({
+                'loss': f'{total_loss.item():.4f}',
+                'lr': f'{current_lr:.2e}'
+            })
+
+        # Step scheduler
+        scheduler.step()
 
         # Calculate average loss for epoch
         avg_loss = epoch_loss / batch_count
         training_history.append({
             'epoch': epoch + 1,
-            'avg_loss': avg_loss
+            'avg_loss': avg_loss,
+            'lr': optimizer.param_groups[0]['lr']
         })
 
-        print(f"Epoch {epoch+1}/{EPOCH} - Average Loss: {avg_loss:.4f}")
+        print(f"Epoch {epoch+1}/{EPOCH} - Avg Loss: {avg_loss:.4f}, LR: {optimizer.param_groups[0]['lr']:.2e}")
 
         # Save best model
         if avg_loss < best_loss:
             best_loss = avg_loss
-            checkpoint_path = OUTPUT_DIR / f"clip_nike_best.pt"
+            checkpoint_path = OUTPUT_DIR / f"clip_sneaker_best_fixed.pt"
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': avg_loss,
             }, checkpoint_path)
-            print(f"Saved best model to {checkpoint_path}")
+            print(f"✓ Saved best model (loss: {avg_loss:.4f})")
 
-        # Save checkpoint every 5 epochs
-        if (epoch + 1) % 5 == 0:
-            checkpoint_path = OUTPUT_DIR / f"clip_nike_epoch_{epoch+1}.pt"
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'loss': avg_loss,
-            }, checkpoint_path)
+        # Early stopping if loss plateaus
+        if epoch > 10 and avg_loss > 2.5:
+            print("\n⚠️  WARNING: Loss is still very high after 10 epochs.")
+            print("    This suggests the model is not learning effectively.")
+            print("    Consider checking:")
+            print("    1. Dataset quality and labels")
+            print("    2. Further reducing learning rate")
+            print("    3. Checking for data loading issues")
 
     # Save final model
-    final_path = OUTPUT_DIR / f"clip_nike_final.pt"
+    final_path = OUTPUT_DIR / f"clip_sneaker_final_fixed.pt"
     torch.save({
         'epoch': EPOCH,
         'model_state_dict': model.state_dict(),
@@ -194,22 +233,26 @@ def train():
     }, final_path)
 
     # Save training history
-    history_path = OUTPUT_DIR / "training_history.json"
+    history_path = OUTPUT_DIR / "training_history_fixed.json"
     with open(history_path, 'w') as f:
         json.dump(training_history, f, indent=2)
 
-    print(f"\nTraining completed!")
+    print(f"\n{'='*70}")
+    print(f"Training completed!")
     print(f"Final model saved to {final_path}")
     print(f"Best loss: {best_loss:.4f}")
+    print(f"Final loss: {avg_loss:.4f}")
+    print(f"{'='*70}")
 
 if __name__ == "__main__":
-    print("="*50)
-    print("CLIP Fine-tuning for Nike Sneakers")
-    print("="*50)
+    print("="*70)
+    print("CLIP Fine-tuning for Sneakers (FIXED VERSION)")
+    print("="*70)
     print(f"Model: {MODEL_NAME}")
     print(f"Batch size: {BATCH_SIZE}")
     print(f"Epochs: {EPOCH}")
-    print(f"Learning rate: {LEARNING_RATE}")
-    print("="*50)
+    print(f"Learning rate: {LEARNING_RATE} (FIXED - much lower!)")
+    print(f"Weight decay: 0.001 (FIXED - much lower!)")
+    print("="*70)
 
     train()

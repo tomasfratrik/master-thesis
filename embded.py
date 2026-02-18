@@ -7,12 +7,12 @@ import numpy as np
 import torch
 from PIL import Image
 from tqdm import tqdm
-import clip
 
 from config import (
-    DATASET_ROOT, ARTIFACTS, MODEL_NAME, DEVICE,
+    DATASET_ROOT, ARTIFACTS, DEVICE,
     IMG_EMB_NPY, IMG_META_JSON, CLS_EMB_NPY, CLS_META_JSON
 )
+from model_loader import load_model
 
 def list_classes(root: Path) -> List[Path]:
     return sorted([p for p in root.iterdir() if p.is_dir()])
@@ -20,11 +20,6 @@ def list_classes(root: Path) -> List[Path]:
 def list_images(cls_dir: Path) -> List[Path]:
     exts = {".jpg", ".jpeg", ".png", ".webp"}
     return sorted([p for p in cls_dir.iterdir() if p.suffix.lower() in exts])
-
-def load_model():
-    model, preprocess = clip.load(MODEL_NAME, device=DEVICE, jit=False)
-    model.eval()
-    return model, preprocess
 
 @torch.no_grad()
 def encode_batch(model, preprocess, paths: List[Path]):
@@ -106,4 +101,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

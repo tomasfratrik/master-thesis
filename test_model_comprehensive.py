@@ -3,13 +3,17 @@ import clip
 from pathlib import Path
 from PIL import Image
 from load_finetuned_clip import load_finetuned_model, test_model
+from config import MODEL_CHECKPOINT
 
 def test_comprehensive():
-    """Test the model comprehensively with only Nike categories from training"""
+    """Test the model comprehensively with only categories from training"""
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load fine-tuned model
-    checkpoint_path = Path("artifacts/finetuned_models/clip_nike_best.pt")
+    if MODEL_CHECKPOINT is None:
+        print("MODEL_CHECKPOINT is not set in config.py")
+        return
+    checkpoint_path = Path(MODEL_CHECKPOINT)
     model, preprocess = load_finetuned_model(checkpoint_path, device)
 
     # Also load base model for comparison
@@ -24,7 +28,7 @@ def test_comprehensive():
         ("sneakers-dataset/nike_dunk_low/0001.jpg", "Dunk Low"),
     ]
 
-    # Text queries - only Nike categories that exist in training data
+    # Text queries - only categories that exist in training data
     text_queries = [
         "a photo of Air Force 1 Low sneakers",
         "a photo of Air Jordan 1 High sneakers",
