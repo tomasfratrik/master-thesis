@@ -1,5 +1,5 @@
 # embed.py
-import json, os
+import json
 from pathlib import Path
 from typing import List, Dict
 
@@ -9,17 +9,26 @@ from PIL import Image
 from tqdm import tqdm
 
 from config import (
-    DATASET_ROOT, ARTIFACTS, DEVICE,
+    DATASET_ROOT, DEVICE,
     IMG_EMB_NPY, IMG_META_JSON, CLS_EMB_NPY, CLS_META_JSON
 )
 from model_loader import load_model
 
-def list_classes(root: Path) -> List[Path]:
-    return sorted([p for p in root.iterdir() if p.is_dir()])
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def discover_class_dirs(root: Path) -> List[Path]:
+    return sorted({
+        p.parent
+        for p in root.rglob("*")
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTS
+    })
 
 def list_images(cls_dir: Path) -> List[Path]:
-    exts = {".jpg", ".jpeg", ".png", ".webp"}
-    return sorted([p for p in cls_dir.iterdir() if p.suffix.lower() in exts])
+    return sorted([
+        p for p in cls_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in IMAGE_EXTS
+    ])
 
 @torch.no_grad()
 def encode_batch(model, preprocess, paths: List[Path]):
@@ -35,15 +44,30 @@ def encode_batch(model, preprocess, paths: List[Path]):
 def main():
     model, preprocess = load_model()
 
-    classes = list_classes(DATASET_ROOT)
+    classes = discover_class_dirs(DATASET_ROOT)
     image_meta: List[Dict] = []
     image_vecs: List[np.ndarray] = []
+    class_to_rep_path: Dict[str, str] = {}
+
+    # Guard against ambiguous class naming when nested folders share the same leaf name.
+    class_name_to_path: Dict[str, Path] = {}
+    for class_dir in classes:
+        class_name = class_dir.name
+        if class_name in class_name_to_path and class_name_to_path[class_name] != class_dir:
+            raise RuntimeError(
+                "Duplicate class leaf directory name detected: "
+                f"{class_name} in {class_name_to_path[class_name]} and {class_dir}. "
+                "Use unique class leaf folder names."
+            )
+        class_name_to_path[class_name] = class_dir
 
     # Per-image embeddings
     for cls_dir in classes:
+        class_name = cls_dir.name
         imgs = list_images(cls_dir)
         if not imgs:
             continue
+        class_to_rep_path.setdefault(class_name, str(imgs[0].as_posix()))
 
         # batch to avoid OOM
         B = 64
@@ -53,7 +77,7 @@ def main():
             image_vecs.append(feats)
             image_meta.extend([
                 {
-                    "class": cls_dir.name,
+                    "class": class_name,
                     "path": str(p.as_posix()),
                     "filename": p.name
                 } for p in batch_paths
@@ -83,11 +107,9 @@ def main():
         v = image_vecs[idxs].mean(axis=0)
         v = v / np.linalg.norm(v)  # re-normalize
         cls_vecs.append(v.astype("float32"))
-        # capture one representative path for thumbnail
-        rep_path = next(DATASET_ROOT.joinpath(cname).glob("*"))
         cls_meta.append({
             "class": cname,
-            "rep_path": str(rep_path.as_posix()),
+            "rep_path": class_to_rep_path[cname],
             "count": len(idxs)
         })
 

@@ -1,4 +1,5 @@
 import torch
+import clip
 from pathlib import Path
 from PIL import Image
 from config import MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT

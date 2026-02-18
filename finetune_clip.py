@@ -9,7 +9,9 @@ from tqdm import tqdm
 import json
 from config import (
     DATASET_ROOT,
-    FINETUNE_OUTPUT_DIR,
+    BEST_CHECKPOINT_PATH,
+    FINAL_CHECKPOINT_PATH,
+    TRAINING_HISTORY_PATH,
     MODEL_NAME,
     DEVICE,
     BATCH_SIZE,
@@ -136,7 +138,7 @@ def train():
     print("\n" + "="*70)
     print("TRAINING CONFIGURATION:")
     print(f"  Learning Rate: {LEARNING_RATE}")
-    print(f"  Weight Decay: 0.001")
+    print(f"  Weight Decay: {WEIGHT_DECAY}")
     print(f"  Batch Size: {BATCH_SIZE}")
     print(f"  Epochs: {EPOCHS}")
     print(f"  Warmup Epochs: {WARMUP_EPOCHS}")
@@ -173,7 +175,7 @@ def train():
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
             # Optimizer step with FP32 conversion if on GPU
-            if device == "cpu":
+            if device.type == "cpu":
                 optimizer.step()
             else:
                 convert_models_to_fp32(model)
@@ -207,41 +209,38 @@ def train():
         # Save best model
         if avg_loss < best_loss:
             best_loss = avg_loss
-            checkpoint_path = FINETUNE_OUTPUT_DIR / "clip_sneaker_best.pt"
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': avg_loss,
-            }, checkpoint_path)
+            }, BEST_CHECKPOINT_PATH)
             print(f"Saved best model (loss: {avg_loss:.4f})")
 
         # Early stopping if loss plateaus
         if epoch > 10 and avg_loss > 2.5:
             print("\nWARNING: Loss is still very high after 10 epochs.")
-            print("\tThis suggests the model is not learning effectively.")
-            print("\tConsider checking:")
-            print("\t1. Dataset quality and labels")
-            print("\t2. Further reducing learning rate")
-            print("\t3. Checking for data loading issues")
+            print("    This suggests the model is not learning effectively.")
+            print("    Consider checking:")
+            print("    1. Dataset quality and labels")
+            print("    2. Further reducing learning rate")
+            print("    3. Checking for data loading issues")
 
     # Save final model
-    final_path = FINETUNE_OUTPUT_DIR / "clip_sneaker_final.pt"
     torch.save({
         'epoch': EPOCHS,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': avg_loss,
-    }, final_path)
+    }, FINAL_CHECKPOINT_PATH)
 
     # Save training history
-    history_path = FINETUNE_OUTPUT_DIR / "training_history.json"
-    with open(history_path, 'w') as f:
+    with open(TRAINING_HISTORY_PATH, 'w') as f:
         json.dump(training_history, f, indent=2)
 
     print(f"\n{'='*70}")
     print(f"Training completed!")
-    print(f"Final model saved to {final_path}")
+    print(f"Final model saved to {FINAL_CHECKPOINT_PATH}")
     print(f"Best loss: {best_loss:.4f}")
     print(f"Final loss: {avg_loss:.4f}")
     print(f"{'='*70}")
