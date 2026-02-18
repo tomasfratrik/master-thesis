@@ -7,18 +7,20 @@ import clip
 from pathlib import Path
 from tqdm import tqdm
 import json
+from config import (
+    DATASET_ROOT,
+    FINETUNE_OUTPUT_DIR,
+    MODEL_NAME,
+    DEVICE,
+    BATCH_SIZE,
+    EPOCHS,
+    LEARNING_RATE,
+    WARMUP_EPOCHS,
+    WEIGHT_DECAY,
+)
 
-# Configuration
-BATCH_SIZE = 32  # Increased from 16
-EPOCH = 30  # Increased from 10
-LEARNING_RATE = 1e-6  # MUCH lower - was 5e-5 (50x reduction!)
-WARMUP_EPOCHS = 3
-MODEL_NAME = "ViT-B/32"
-DATASET_ROOT = Path("sneakers-dataset")
-OUTPUT_DIR = Path("artifacts/finetuned_models")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-device = "cuda:0" if torch.cuda.is_available() else "cpu"
+# Configuration (from config.py)
+device = DEVICE
 print(f"Using device: {device}")
 
 # Load CLIP model
@@ -101,7 +103,7 @@ def train():
     )
 
     # Setup model precision
-    if device == "cpu":
+    if device.type == "cpu":
         model.float()
     else:
         clip.model.convert_weights(model)
@@ -116,7 +118,7 @@ def train():
         lr=LEARNING_RATE,
         betas=(0.9, 0.98),
         eps=1e-6,
-        weight_decay=0.001  # Reduced from 0.2 to 0.001
+        weight_decay=WEIGHT_DECAY
     )
 
     # Learning rate scheduler with warmup
@@ -136,16 +138,16 @@ def train():
     print(f"  Learning Rate: {LEARNING_RATE}")
     print(f"  Weight Decay: 0.001")
     print(f"  Batch Size: {BATCH_SIZE}")
-    print(f"  Epochs: {EPOCH}")
+    print(f"  Epochs: {EPOCHS}")
     print(f"  Warmup Epochs: {WARMUP_EPOCHS}")
     print("="*70 + "\n")
 
-    for epoch in range(EPOCH):
+    for epoch in range(EPOCHS):
         model.train()
         epoch_loss = 0
         batch_count = 0
 
-        progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{EPOCH}")
+        progress_bar = tqdm(train_dataloader, desc=f"Epoch {epoch+1}/{EPOCHS}")
 
         for batch in progress_bar:
             optimizer.zero_grad()
@@ -200,40 +202,40 @@ def train():
             'lr': optimizer.param_groups[0]['lr']
         })
 
-        print(f"Epoch {epoch+1}/{EPOCH} - Avg Loss: {avg_loss:.4f}, LR: {optimizer.param_groups[0]['lr']:.2e}")
+        print(f"Epoch {epoch+1}/{EPOCHS} - Avg Loss: {avg_loss:.4f}, LR: {optimizer.param_groups[0]['lr']:.2e}")
 
         # Save best model
         if avg_loss < best_loss:
             best_loss = avg_loss
-            checkpoint_path = OUTPUT_DIR / f"clip_sneaker_best.pt"
+            checkpoint_path = FINETUNE_OUTPUT_DIR / "clip_sneaker_best.pt"
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': avg_loss,
             }, checkpoint_path)
-            print(f"✓ Saved best model (loss: {avg_loss:.4f})")
+            print(f"Saved best model (loss: {avg_loss:.4f})")
 
         # Early stopping if loss plateaus
         if epoch > 10 and avg_loss > 2.5:
-            print("\n⚠️  WARNING: Loss is still very high after 10 epochs.")
-            print("    This suggests the model is not learning effectively.")
-            print("    Consider checking:")
-            print("    1. Dataset quality and labels")
-            print("    2. Further reducing learning rate")
-            print("    3. Checking for data loading issues")
+            print("\nWARNING: Loss is still very high after 10 epochs.")
+            print("\tThis suggests the model is not learning effectively.")
+            print("\tConsider checking:")
+            print("\t1. Dataset quality and labels")
+            print("\t2. Further reducing learning rate")
+            print("\t3. Checking for data loading issues")
 
     # Save final model
-    final_path = OUTPUT_DIR / f"clip_sneaker_final.pt"
+    final_path = FINETUNE_OUTPUT_DIR / "clip_sneaker_final.pt"
     torch.save({
-        'epoch': EPOCH,
+        'epoch': EPOCHS,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
         'loss': avg_loss,
     }, final_path)
 
     # Save training history
-    history_path = OUTPUT_DIR / "training_history.json"
+    history_path = FINETUNE_OUTPUT_DIR / "training_history.json"
     with open(history_path, 'w') as f:
         json.dump(training_history, f, indent=2)
 
@@ -250,9 +252,9 @@ if __name__ == "__main__":
     print("="*70)
     print(f"Model: {MODEL_NAME}")
     print(f"Batch size: {BATCH_SIZE}")
-    print(f"Epochs: {EPOCH}")
+    print(f"Epochs: {EPOCHS}")
     print(f"Learning rate: {LEARNING_RATE}")
-    print(f"Weight decay: 0.001")
+    print(f"Weight decay: {WEIGHT_DECAY}")
     print("="*70)
 
     train()
