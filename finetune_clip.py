@@ -9,9 +9,10 @@ from tqdm import tqdm
 import json
 
 # Configuration
-BATCH_SIZE = 16
-EPOCH = 10
-LEARNING_RATE = 5e-5
+BATCH_SIZE = 32  # Increased from 16
+EPOCH = 30  # Increased from 10
+LEARNING_RATE = 1e-6  # MUCH lower - was 5e-5 (50x reduction!)
+WARMUP_EPOCHS = 3
 MODEL_NAME = "ViT-B/32"
 DATASET_ROOT = Path("sneakers-dataset")
 OUTPUT_DIR = Path("artifacts/finetuned_models")
@@ -109,18 +110,35 @@ def train():
     loss_img = nn.CrossEntropyLoss()
     loss_txt = nn.CrossEntropyLoss()
 
-    # Optimizer from paper
+    # Optimizer configuration
     optimizer = optim.Adam(
         model.parameters(),
         lr=LEARNING_RATE,
         betas=(0.9, 0.98),
         eps=1e-6,
-        weight_decay=0.2
+        weight_decay=0.001  # Reduced from 0.2 to 0.001
     )
+
+    # Learning rate scheduler with warmup
+    def get_lr(epoch):
+        if epoch < WARMUP_EPOCHS:
+            return (epoch + 1) / WARMUP_EPOCHS
+        return 1.0
+
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=get_lr)
 
     # Training loop
     best_loss = float('inf')
     training_history = []
+
+    print("\n" + "="*70)
+    print("TRAINING CONFIGURATION:")
+    print(f"  Learning Rate: {LEARNING_RATE}")
+    print(f"  Weight Decay: 0.001")
+    print(f"  Batch Size: {BATCH_SIZE}")
+    print(f"  Epochs: {EPOCH}")
+    print(f"  Warmup Epochs: {WARMUP_EPOCHS}")
+    print("="*70 + "\n")
 
     for epoch in range(EPOCH):
         model.train()
@@ -149,6 +167,9 @@ def train():
             # Backward pass
             total_loss.backward()
 
+            # Clip gradients to prevent explosion
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
             # Optimizer step with FP32 conversion if on GPU
             if device == "cpu":
                 optimizer.step()
@@ -162,16 +183,24 @@ def train():
             batch_count += 1
 
             # Update progress bar
-            progress_bar.set_postfix({'loss': total_loss.item()})
+            current_lr = optimizer.param_groups[0]['lr']
+            progress_bar.set_postfix({
+                'loss': f'{total_loss.item():.4f}',
+                'lr': f'{current_lr:.2e}'
+            })
+
+        # Step scheduler
+        scheduler.step()
 
         # Calculate average loss for epoch
         avg_loss = epoch_loss / batch_count
         training_history.append({
             'epoch': epoch + 1,
-            'avg_loss': avg_loss
+            'avg_loss': avg_loss,
+            'lr': optimizer.param_groups[0]['lr']
         })
 
-        print(f"Epoch {epoch+1}/{EPOCH} - Average Loss: {avg_loss:.4f}")
+        print(f"Epoch {epoch+1}/{EPOCH} - Avg Loss: {avg_loss:.4f}, LR: {optimizer.param_groups[0]['lr']:.2e}")
 
         # Save best model
         if avg_loss < best_loss:
@@ -183,17 +212,16 @@ def train():
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': avg_loss,
             }, checkpoint_path)
-            print(f"Saved best model to {checkpoint_path}")
+            print(f"✓ Saved best model (loss: {avg_loss:.4f})")
 
-        # Save checkpoint every 5 epochs
-        if (epoch + 1) % 5 == 0:
-            checkpoint_path = OUTPUT_DIR / f"clip_sneaker_epoch_{epoch+1}.pt"
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'loss': avg_loss,
-            }, checkpoint_path)
+        # Early stopping if loss plateaus
+        if epoch > 10 and avg_loss > 2.5:
+            print("\n⚠️  WARNING: Loss is still very high after 10 epochs.")
+            print("    This suggests the model is not learning effectively.")
+            print("    Consider checking:")
+            print("    1. Dataset quality and labels")
+            print("    2. Further reducing learning rate")
+            print("    3. Checking for data loading issues")
 
     # Save final model
     final_path = OUTPUT_DIR / f"clip_sneaker_final.pt"
@@ -209,18 +237,22 @@ def train():
     with open(history_path, 'w') as f:
         json.dump(training_history, f, indent=2)
 
-    print(f"\nTraining completed!")
+    print(f"\n{'='*70}")
+    print(f"Training completed!")
     print(f"Final model saved to {final_path}")
     print(f"Best loss: {best_loss:.4f}")
+    print(f"Final loss: {avg_loss:.4f}")
+    print(f"{'='*70}")
 
 if __name__ == "__main__":
-    print("="*50)
+    print("="*70)
     print("CLIP Fine-tuning for Sneakers")
-    print("="*50)
+    print("="*70)
     print(f"Model: {MODEL_NAME}")
     print(f"Batch size: {BATCH_SIZE}")
     print(f"Epochs: {EPOCH}")
     print(f"Learning rate: {LEARNING_RATE}")
-    print("="*50)
+    print(f"Weight decay: 0.001")
+    print("="*70)
 
     train()
