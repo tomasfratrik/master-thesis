@@ -1,12 +1,18 @@
+import os
 from pathlib import Path
 
 import torch
 
+PROJECT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = PROJECT_DIR.parent
+
 # Adjust to your dataset root
-DATASET_ROOT = Path("sneakers-dataset")
+DATASET_ROOT = Path(
+    os.getenv("SNEAKER_DATASET_ROOT", REPO_ROOT / "dataset" / "sneakers-preprocessed")
+)
 
 # Artifacts output
-ARTIFACTS = Path("artifacts")
+ARTIFACTS = PROJECT_DIR / "artifacts"
 ARTIFACTS.mkdir(parents=True, exist_ok=True)
 FINETUNE_OUTPUT_DIR = ARTIFACTS / "finetuned_models"
 FINETUNE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
