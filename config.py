@@ -58,6 +58,10 @@ ARTIFACTS = PROJECT_DIR / "artifacts"
 ARTIFACTS.mkdir(parents=True, exist_ok=True)
 FINETUNE_OUTPUT_DIR = ARTIFACTS / "finetuned_models"
 FINETUNE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+PREVIEWS_DIR = ARTIFACTS / "previews"
+PREVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+PREVIEW_URL_PREFIX = "/previews"
+PREVIEW_LIMIT = _int_env("SNEAKER_PREVIEW_LIMIT", 10)
 
 # Model
 MODEL_BACKEND = "clip"

@@ -1,5 +1,5 @@
 
-.PHONY: install freeze run docker-build docker-predict
+.PHONY: install freeze run docker-build docker-predict eval-finetuned seed-previews
 
 run:
 	source venv/bin/activate
@@ -14,6 +14,8 @@ help:
 	@echo "  make install  - Install packages from requirements.txt"
 	@echo "  make docker-build - Build prediction image"
 	@echo "  make docker-predict IMAGE=path/to/image.jpg - Run prediction in Docker"
+	@echo "  make eval-finetuned CHECKPOINT=... TEST_ROOT=... - Evaluate checkpoint on labeled test split"
+	@echo "  make seed-previews SOURCE_ROOT=... - Copy sample preview images per class"
 
 freeze:
 	pip freeze > requirements.txt
@@ -27,3 +29,9 @@ docker-build:
 
 docker-predict:
 	docker run --rm -v $(PWD)/artifacts:/app/artifacts -v $(PWD):/workspace sneaker-labeler:latest --image /workspace/$(IMAGE)
+
+eval-finetuned:
+	./venv/bin/python evaluate_finetuned.py --checkpoint $(CHECKPOINT) --test-root $(TEST_ROOT) --output-json artifacts/eval_finetuned_report.json
+
+seed-previews:
+	./venv/bin/python seed_previews.py --source-root $(SOURCE_ROOT)

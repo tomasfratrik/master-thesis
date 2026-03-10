@@ -1,16 +1,32 @@
 import io
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import clip
 import torch
 from PIL import Image
 
-from config import DEVICE, MODEL_NAME
+from config import DEVICE, MODEL_NAME, PREVIEWS_DIR, PREVIEW_LIMIT, PREVIEW_URL_PREFIX
 
 
 def _format_class_name(class_name: str) -> str:
     return class_name.replace("_", " ").title()
+
+
+def _preview_urls(class_name: str, limit: int = PREVIEW_LIMIT) -> list[str]:
+    preview_dir = PREVIEWS_DIR / class_name
+    if not preview_dir.exists():
+        return []
+
+    urls: list[str] = []
+    for path in sorted(preview_dir.iterdir()):
+        if not path.is_file():
+            continue
+        urls.append(f"{PREVIEW_URL_PREFIX}/{quote(class_name)}/{quote(path.name)}")
+        if len(urls) >= limit:
+            break
+    return urls
 
 
 class FineTunedSneakerClassifier:
@@ -37,13 +53,15 @@ class FineTunedSneakerClassifier:
         with torch.no_grad():
             self.text_tokens = clip.tokenize(self.class_prompts).to(self.device)
             text_features = self.model.encode_text(self.text_tokens)
-            self.text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+            self.text_features = text_features.float()
 
     @torch.no_grad()
     def predict_image(self, image: Image.Image, k: int = 5) -> dict[str, Any]:
         image_tensor = self.preprocess(image.convert("RGB")).unsqueeze(0).to(self.device)
         image_features = self.model.encode_image(image_tensor)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        image_features = image_features.float()
 
         probabilities = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)[0]
         k = max(1, min(int(k), len(self.class_names)))
@@ -58,6 +76,7 @@ class FineTunedSneakerClassifier:
                     "label": _format_class_name(class_name),
                     "prompt": self.class_prompts[index],
                     "score": float(score),
+                    "preview_urls": _preview_urls(class_name),
                 }
             )
 
@@ -65,6 +84,7 @@ class FineTunedSneakerClassifier:
             "label": top_k[0]["label"],
             "class_name": top_k[0]["class_name"],
             "score": top_k[0]["score"],
+            "preview_urls": top_k[0]["preview_urls"],
             "top_k": top_k,
         }
 

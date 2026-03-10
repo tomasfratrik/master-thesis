@@ -3,11 +3,14 @@ import os
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
+from config import PREVIEWS_DIR
 from finetuned_classifier_service import FineTunedSneakerClassifier
 from sneaker_service import SneakerLabelService
 
 app = FastAPI(title="Sneaker Visual Search (Per-Class)")
+app.mount("/previews", StaticFiles(directory=str(PREVIEWS_DIR)), name="previews")
 
 # CORS for local Svelte dev
 app.add_middleware(
@@ -43,6 +46,7 @@ async def health():
             "predict_ready": checkpoint_classifier is not None,
             "predict_error": checkpoint_classifier_error,
             "checkpoint_path": checkpoint_path,
+            "previews_dir": str(PREVIEWS_DIR),
         }
     )
 
