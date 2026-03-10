@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from config import CLS_META_JSON, DEVICE, FAISS_INDEX
+from config import CLS_META_JSON, DEVICE, FAISS_INDEX, MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
 from model_loader import load_model
 
 
@@ -19,6 +19,7 @@ class SneakerLabelService:
         meta_path: Path = CLS_META_JSON,
         use_checkpoint: bool | None = None,
     ) -> None:
+        self.use_checkpoint = MODEL_USE_CHECKPOINT if use_checkpoint is None else use_checkpoint
         self.model, self.preprocess = load_model(use_checkpoint=use_checkpoint)
         self.index = faiss.read_index(str(index_path))
         with open(meta_path, "r", encoding="utf-8") as f:
@@ -28,6 +29,43 @@ class SneakerLabelService:
             raise ValueError(
                 "FAISS index size and class metadata size do not match: "
                 f"{self.index.ntotal} != {len(self.meta)}"
+            )
+
+        if self.use_checkpoint:
+            self._validate_checkpoint_labels()
+
+    @staticmethod
+    def _normalize_label(value: str) -> str:
+        return "".join(ch.lower() for ch in value if ch.isalnum())
+
+    def _validate_checkpoint_labels(self) -> None:
+        if MODEL_CHECKPOINT is None:
+            raise ValueError(
+                "Checkpoint retrieval requested but SNEAKER_MODEL_CHECKPOINT is not set."
+            )
+
+        checkpoint = torch.load(MODEL_CHECKPOINT, map_location="cpu")
+        checkpoint_classes = checkpoint.get("class_names")
+        if not checkpoint_classes:
+            raise ValueError(
+                f"Checkpoint does not contain class_names: {MODEL_CHECKPOINT}"
+            )
+
+        index_classes = [self._extract_id(item) for item in self.meta]
+        normalized_checkpoint = {self._normalize_label(name) for name in checkpoint_classes}
+        normalized_index = {self._normalize_label(name) for name in index_classes}
+
+        if normalized_checkpoint != normalized_index:
+            checkpoint_only = sorted(set(checkpoint_classes) - set(index_classes))[:5]
+            index_only = sorted(set(index_classes) - set(checkpoint_classes))[:5]
+            raise ValueError(
+                "Checkpoint class labels do not match the FAISS index metadata. "
+                "This usually means the checkpoint was trained on a different dataset than "
+                "the retrieval index. Use predict_finetuned.py for checkpoint classification, "
+                "or rebuild the embeddings and index with `python embded.py --use-checkpoint` "
+                "followed by `python index.py`. "
+                f"Checkpoint-only examples: {checkpoint_only or 'none'}. "
+                f"Index-only examples: {index_only or 'none'}."
             )
 
     @staticmethod
