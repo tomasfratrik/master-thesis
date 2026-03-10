@@ -12,8 +12,12 @@ dataset = SneakerDataset(DATASET_ROOT, preprocess)
 print(f"\nDataset size: {len(dataset)}")
 print(f"\nFirst 10 samples:")
 for i in range(min(10, len(dataset))):
-    img, txt = dataset[i]
-    print(f"{i+1}. Image shape: {img.shape}, Text: {dataset.texts[i]}")
+    img, label = dataset[i]
+    print(
+        f"{i+1}. Image shape: {img.shape}, "
+        f"Label: {dataset.class_names[label]}, "
+        f"Prompt: {dataset.class_prompts[label]}"
+    )
 
 print(f"\nUnique sneaker categories found:")
 image_exts = {".jpg", ".jpeg", ".png", ".webp"}

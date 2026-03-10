@@ -6,6 +6,8 @@ from typing import Dict, List
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+PROJECT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = PROJECT_DIR.parent
 
 
 def parse_args() -> argparse.Namespace:
@@ -15,13 +17,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-root",
         type=Path,
-        default=Path("sneakers-dataset"),
+        default=REPO_ROOT / "dataset" / "sneakers",
         help="Root folder containing class image folders.",
     )
     parser.add_argument(
         "--output-root",
         type=Path,
-        default=Path("sneakers-split"),
+        default=REPO_ROOT / "dataset" / "sneakers-split",
         help="Output root folder for train/val/test splits.",
     )
     parser.add_argument(
