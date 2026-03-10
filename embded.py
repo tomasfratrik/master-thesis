@@ -1,4 +1,5 @@
 # embed.py
+import argparse
 import json
 from pathlib import Path
 from typing import List, Dict
@@ -9,12 +10,34 @@ from PIL import Image
 from tqdm import tqdm
 
 from config import (
-    DATASET_ROOT, DEVICE,
-    IMG_EMB_NPY, IMG_META_JSON, CLS_EMB_NPY, CLS_META_JSON
+    CLS_EMB_NPY,
+    CLS_META_JSON,
+    DATASET_ROOT,
+    DEVICE,
+    IMG_EMB_NPY,
+    IMG_META_JSON,
 )
 from model_loader import load_model
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Build image and class embeddings for a sneaker dataset."
+    )
+    parser.add_argument(
+        "--dataset-root",
+        type=Path,
+        default=DATASET_ROOT,
+        help="Root containing class folders with images.",
+    )
+    parser.add_argument(
+        "--use-checkpoint",
+        action="store_true",
+        help="Load checkpoint weights when generating embeddings.",
+    )
+    return parser.parse_args()
 
 
 def discover_class_dirs(root: Path) -> List[Path]:
@@ -42,9 +65,10 @@ def encode_batch(model, preprocess, paths: List[Path]):
     return z.cpu().numpy().astype("float32")  # [B, D]
 
 def main():
-    model, preprocess = load_model()
+    args = parse_args()
+    model, preprocess = load_model(use_checkpoint=True if args.use_checkpoint else None)
 
-    classes = discover_class_dirs(DATASET_ROOT)
+    classes = discover_class_dirs(args.dataset_root)
     image_meta: List[Dict] = []
     image_vecs: List[np.ndarray] = []
     class_to_rep_path: Dict[str, str] = {}
@@ -84,7 +108,7 @@ def main():
             ])
 
     if not image_meta:
-        raise RuntimeError("No images found under dataset root.")
+        raise RuntimeError(f"No images found under dataset root: {args.dataset_root}")
 
     image_vecs = np.vstack(image_vecs)  # [M, D]
     np.save(IMG_EMB_NPY, image_vecs)
@@ -120,6 +144,7 @@ def main():
 
     print(f"Saved per-class embeddings: {cls_vecs.shape} -> {CLS_EMB_NPY}")
     print(f"Saved per-class metadata: {len(cls_meta)} classes -> {CLS_META_JSON}")
+    print(f"Embedded dataset root: {args.dataset_root}")
 
 if __name__ == "__main__":
     main()
