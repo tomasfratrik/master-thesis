@@ -83,3 +83,33 @@ async def predict(
     b = await file.read()
     prediction = checkpoint_classifier.predict_image_bytes(b, k=k)
     return JSONResponse(prediction)
+
+
+@app.post("/predict-item")
+async def predict_item(
+    files: list[UploadFile] = File(...),
+    k: int = Query(5, ge=1, le=50),
+):
+    if checkpoint_classifier is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Checkpoint classifier is not configured. "
+                "Set SNEAKER_MODEL_CHECKPOINT before starting the API."
+            ),
+        )
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one file is required.")
+
+    payloads: list[bytes] = []
+    filenames: list[str] = []
+    for file in files:
+        payload = await file.read()
+        if not payload:
+            raise HTTPException(status_code=400, detail=f"Empty file payload: {file.filename}")
+        payloads.append(payload)
+        filenames.append(file.filename or "upload")
+
+    prediction = checkpoint_classifier.predict_image_bytes_batch(payloads, k=k)
+    prediction["query_filenames"] = filenames
+    return JSONResponse(prediction)

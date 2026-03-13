@@ -57,13 +57,31 @@ class FineTunedSneakerClassifier:
             self.text_features = text_features.float()
 
     @torch.no_grad()
-    def predict_image(self, image: Image.Image, k: int = 5) -> dict[str, Any]:
-        image_tensor = self.preprocess(image.convert("RGB")).unsqueeze(0).to(self.device)
-        image_features = self.model.encode_image(image_tensor)
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-        image_features = image_features.float()
+    def _encode_images(self, images: list[Image.Image]) -> torch.Tensor:
+        if not images:
+            raise ValueError("At least one image is required for prediction.")
 
-        probabilities = (100.0 * image_features @ self.text_features.T).softmax(dim=-1)[0]
+        image_tensors = [
+            self.preprocess(image.convert("RGB"))
+            for image in images
+        ]
+        batch = torch.stack(image_tensors, dim=0).to(self.device)
+        image_features = self.model.encode_image(batch)
+        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        return image_features.float()
+
+    @staticmethod
+    def _aggregate_features(image_features: torch.Tensor) -> torch.Tensor:
+        # Represent one sneaker item by averaging all view embeddings, then renormalizing.
+        aggregated = image_features.mean(dim=0, keepdim=True)
+        return aggregated / aggregated.norm(dim=-1, keepdim=True)
+
+    def _build_prediction_result(
+        self,
+        probabilities: torch.Tensor,
+        k: int,
+        query_image_count: int,
+    ) -> dict[str, Any]:
         k = max(1, min(int(k), len(self.class_names)))
         top_scores, top_indices = probabilities.topk(k)
 
@@ -80,18 +98,43 @@ class FineTunedSneakerClassifier:
                 }
             )
 
+        second_best_score = top_k[1]["score"] if len(top_k) > 1 else 0.0
         return {
             "label": top_k[0]["label"],
             "class_name": top_k[0]["class_name"],
             "score": top_k[0]["score"],
+            "margin_vs_second": float(top_k[0]["score"] - second_best_score),
+            "query_image_count": int(query_image_count),
             "preview_urls": top_k[0]["preview_urls"],
             "top_k": top_k,
         }
+
+    @torch.no_grad()
+    def predict_images(self, images: list[Image.Image], k: int = 5) -> dict[str, Any]:
+        image_features = self._encode_images(images)
+        aggregated_features = self._aggregate_features(image_features)
+        probabilities = (100.0 * aggregated_features @ self.text_features.T).softmax(dim=-1)[0]
+        return self._build_prediction_result(
+            probabilities=probabilities,
+            k=k,
+            query_image_count=len(images),
+        )
+
+    def predict_image(self, image: Image.Image, k: int = 5) -> dict[str, Any]:
+        return self.predict_images(images=[image], k=k)
 
     def predict_image_bytes(self, image_bytes: bytes, k: int = 5) -> dict[str, Any]:
         image = Image.open(io.BytesIO(image_bytes))
         return self.predict_image(image=image, k=k)
 
+    def predict_image_bytes_batch(self, image_payloads: list[bytes], k: int = 5) -> dict[str, Any]:
+        images = [Image.open(io.BytesIO(payload)) for payload in image_payloads]
+        return self.predict_images(images=images, k=k)
+
     def predict_image_path(self, image_path: str | Path, k: int = 5) -> dict[str, Any]:
         image = Image.open(image_path)
         return self.predict_image(image=image, k=k)
+
+    def predict_image_paths(self, image_paths: list[str | Path], k: int = 5) -> dict[str, Any]:
+        images = [Image.open(image_path) for image_path in image_paths]
+        return self.predict_images(images=images, k=k)
