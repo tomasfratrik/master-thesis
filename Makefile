@@ -1,5 +1,5 @@
 
-.PHONY: install freeze run docker-build docker-predict eval-finetuned seed-previews
+.PHONY: install freeze run run-app-backend docker-build docker-predict eval-finetuned seed-previews
 
 run:
 	source venv/bin/activate
@@ -12,6 +12,7 @@ help:
 	@echo "Available commands:"
 	@echo "  make freeze   - Freeze current Python dependencies into requirements.txt"
 	@echo "  make install  - Install packages from requirements.txt"
+	@echo "  make run-app-backend - Run the catalog/backend API"
 	@echo "  make docker-build - Build prediction image"
 	@echo "  make docker-predict IMAGE=path/to/image.jpg - Run prediction in Docker"
 	@echo "  make eval-finetuned CHECKPOINT=... TEST_ROOT=... - Evaluate checkpoint on labeled test split"
@@ -23,6 +24,9 @@ freeze:
 install: venv-install
 	pip install -r requirements.txt
 	pip install git+https://github.com/openai/CLIP.git
+
+run-app-backend:
+	./venv/bin/uvicorn app_backend.api:app --host 0.0.0.0 --port 8090
 
 docker-build:
 	docker build -t sneaker-labeler:latest .
