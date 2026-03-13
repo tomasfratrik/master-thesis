@@ -17,6 +17,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--checkpoint", required=True, help="Path to fine-tuned checkpoint.")
     parser.add_argument("--top-k", type=int, default=5, help="Top-k predictions to return.")
+    parser.add_argument(
+        "--aggregation",
+        choices=["embedding_mean", "logit_mean", "prob_mean"],
+        default="embedding_mean",
+        help="How to fuse multiple query images into one result.",
+    )
     return parser.parse_args()
 
 
@@ -32,7 +38,11 @@ def main() -> None:
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     classifier = FineTunedSneakerClassifier(checkpoint_path=checkpoint_path)
-    result = classifier.predict_image_paths(image_paths=image_paths, k=args.top_k)
+    result = classifier.predict_image_paths(
+        image_paths=image_paths,
+        k=args.top_k,
+        aggregation=args.aggregation,
+    )
     print(json.dumps(result, indent=2))
 
 

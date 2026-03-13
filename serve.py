@@ -1,4 +1,5 @@
 import os
+from typing import Literal
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -70,6 +71,7 @@ async def search(
 async def predict(
     file: UploadFile = File(...),
     k: int = Query(5, ge=1, le=50),
+    aggregation: Literal["embedding_mean", "logit_mean", "prob_mean"] = Query("embedding_mean"),
 ):
     if checkpoint_classifier is None:
         raise HTTPException(
@@ -81,7 +83,7 @@ async def predict(
         )
 
     b = await file.read()
-    prediction = checkpoint_classifier.predict_image_bytes(b, k=k)
+    prediction = checkpoint_classifier.predict_image_bytes(b, k=k, aggregation=aggregation)
     return JSONResponse(prediction)
 
 
@@ -89,6 +91,7 @@ async def predict(
 async def predict_item(
     files: list[UploadFile] = File(...),
     k: int = Query(5, ge=1, le=50),
+    aggregation: Literal["embedding_mean", "logit_mean", "prob_mean"] = Query("embedding_mean"),
 ):
     if checkpoint_classifier is None:
         raise HTTPException(
@@ -110,6 +113,10 @@ async def predict_item(
         payloads.append(payload)
         filenames.append(file.filename or "upload")
 
-    prediction = checkpoint_classifier.predict_image_bytes_batch(payloads, k=k)
+    prediction = checkpoint_classifier.predict_image_bytes_batch(
+        payloads,
+        k=k,
+        aggregation=aggregation,
+    )
     prediction["query_filenames"] = filenames
     return JSONResponse(prediction)

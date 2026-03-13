@@ -1,6 +1,6 @@
 import io
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import quote
 
 import clip
@@ -27,6 +27,9 @@ def _preview_urls(class_name: str, limit: int = PREVIEW_LIMIT) -> list[str]:
         if len(urls) >= limit:
             break
     return urls
+
+
+AggregationMode = Literal["embedding_mean", "logit_mean", "prob_mean"]
 
 
 class FineTunedSneakerClassifier:
@@ -76,11 +79,25 @@ class FineTunedSneakerClassifier:
         aggregated = image_features.mean(dim=0, keepdim=True)
         return aggregated / aggregated.norm(dim=-1, keepdim=True)
 
+    @staticmethod
+    def _validate_aggregation(aggregation: str) -> AggregationMode:
+        valid = {"embedding_mean", "logit_mean", "prob_mean"}
+        if aggregation not in valid:
+            raise ValueError(
+                f"Unsupported aggregation mode: {aggregation}. "
+                f"Expected one of: {', '.join(sorted(valid))}."
+            )
+        return aggregation  # type: ignore[return-value]
+
+    def _compute_logits(self, image_features: torch.Tensor) -> torch.Tensor:
+        return 100.0 * image_features @ self.text_features.T
+
     def _build_prediction_result(
         self,
         probabilities: torch.Tensor,
         k: int,
         query_image_count: int,
+        aggregation: AggregationMode,
     ) -> dict[str, Any]:
         k = max(1, min(int(k), len(self.class_names)))
         top_scores, top_indices = probabilities.topk(k)
@@ -105,36 +122,76 @@ class FineTunedSneakerClassifier:
             "score": top_k[0]["score"],
             "margin_vs_second": float(top_k[0]["score"] - second_best_score),
             "query_image_count": int(query_image_count),
+            "aggregation": aggregation,
             "preview_urls": top_k[0]["preview_urls"],
             "top_k": top_k,
         }
 
     @torch.no_grad()
-    def predict_images(self, images: list[Image.Image], k: int = 5) -> dict[str, Any]:
+    def predict_images(
+        self,
+        images: list[Image.Image],
+        k: int = 5,
+        aggregation: AggregationMode = "embedding_mean",
+    ) -> dict[str, Any]:
+        aggregation = self._validate_aggregation(aggregation)
         image_features = self._encode_images(images)
-        aggregated_features = self._aggregate_features(image_features)
-        probabilities = (100.0 * aggregated_features @ self.text_features.T).softmax(dim=-1)[0]
+        if aggregation == "embedding_mean":
+            aggregated_features = self._aggregate_features(image_features)
+            probabilities = self._compute_logits(aggregated_features).softmax(dim=-1)[0]
+        else:
+            logits = self._compute_logits(image_features)
+            if aggregation == "logit_mean":
+                probabilities = logits.mean(dim=0).softmax(dim=-1)
+            else:
+                probabilities = logits.softmax(dim=-1).mean(dim=0)
         return self._build_prediction_result(
             probabilities=probabilities,
             k=k,
             query_image_count=len(images),
+            aggregation=aggregation,
         )
 
-    def predict_image(self, image: Image.Image, k: int = 5) -> dict[str, Any]:
-        return self.predict_images(images=[image], k=k)
+    def predict_image(
+        self,
+        image: Image.Image,
+        k: int = 5,
+        aggregation: AggregationMode = "embedding_mean",
+    ) -> dict[str, Any]:
+        return self.predict_images(images=[image], k=k, aggregation=aggregation)
 
-    def predict_image_bytes(self, image_bytes: bytes, k: int = 5) -> dict[str, Any]:
+    def predict_image_bytes(
+        self,
+        image_bytes: bytes,
+        k: int = 5,
+        aggregation: AggregationMode = "embedding_mean",
+    ) -> dict[str, Any]:
         image = Image.open(io.BytesIO(image_bytes))
-        return self.predict_image(image=image, k=k)
+        return self.predict_image(image=image, k=k, aggregation=aggregation)
 
-    def predict_image_bytes_batch(self, image_payloads: list[bytes], k: int = 5) -> dict[str, Any]:
+    def predict_image_bytes_batch(
+        self,
+        image_payloads: list[bytes],
+        k: int = 5,
+        aggregation: AggregationMode = "embedding_mean",
+    ) -> dict[str, Any]:
         images = [Image.open(io.BytesIO(payload)) for payload in image_payloads]
-        return self.predict_images(images=images, k=k)
+        return self.predict_images(images=images, k=k, aggregation=aggregation)
 
-    def predict_image_path(self, image_path: str | Path, k: int = 5) -> dict[str, Any]:
+    def predict_image_path(
+        self,
+        image_path: str | Path,
+        k: int = 5,
+        aggregation: AggregationMode = "embedding_mean",
+    ) -> dict[str, Any]:
         image = Image.open(image_path)
-        return self.predict_image(image=image, k=k)
+        return self.predict_image(image=image, k=k, aggregation=aggregation)
 
-    def predict_image_paths(self, image_paths: list[str | Path], k: int = 5) -> dict[str, Any]:
+    def predict_image_paths(
+        self,
+        image_paths: list[str | Path],
+        k: int = 5,
+        aggregation: AggregationMode = "embedding_mean",
+    ) -> dict[str, Any]:
         images = [Image.open(image_path) for image_path in image_paths]
-        return self.predict_images(images=images, k=k)
+        return self.predict_images(images=images, k=k, aggregation=aggregation)
