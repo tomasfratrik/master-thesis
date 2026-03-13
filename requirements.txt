@@ -28,12 +28,14 @@ nvidia-nvshmem-cu12==3.4.5
 nvidia-nvtx-cu12==12.8.90
 packaging==26.0
 pillow==12.1.1
+pillow-avif-plugin>=1.4.0
 regex==2026.1.15
 sympy==1.14.0
 torch==2.10.0
 torchvision==0.25.0
 tqdm==4.67.3
 triton==3.6.0
+transformers>=4.39.0
 typing_extensions==4.15.0
 python-multipart==0.0.20
 uvicorn==0.38.0

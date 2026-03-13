@@ -112,6 +112,7 @@ async def health() -> JSONResponse:
             "predict_error": classifier_error,
             "checkpoint_path": MODEL_CHECKPOINT,
             "previews_dir": str(PREVIEWS_DIR),
+            "preprocess_mode": "local",
         }
     )
 
