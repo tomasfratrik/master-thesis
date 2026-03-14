@@ -2,7 +2,7 @@ import argparse
 import shutil
 from pathlib import Path
 
-from config import DATASET_ROOT, PREVIEWS_DIR, TRAIN_SPLIT_ROOT
+from backend.config import DATASET_ROOT, PREVIEWS_DIR, TRAIN_SPLIT_ROOT
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}

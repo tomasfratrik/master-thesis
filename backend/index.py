@@ -1,6 +1,6 @@
 # index.py
 import faiss, numpy as np, json
-from config import CLS_EMB_NPY, CLS_META_JSON, FAISS_INDEX
+from backend.config import CLS_EMB_NPY, CLS_META_JSON, FAISS_INDEX
 
 def main():
     xb = np.load(CLS_EMB_NPY).astype("float32")  # [C, D], unit-normal
@@ -16,4 +16,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import PREVIEWS_DIR
+from backend.config import PREVIEWS_DIR
 from .finetuned_classifier_service import FineTunedSneakerClassifier
 
 from .auth import authenticate_user, create_session, create_user, get_current_user

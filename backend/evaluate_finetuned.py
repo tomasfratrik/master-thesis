@@ -8,7 +8,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from backend.app.finetuned_classifier_service import FineTunedSneakerClassifier
-from config import TEST_SPLIT_ROOT
+from backend.config import TEST_SPLIT_ROOT
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}

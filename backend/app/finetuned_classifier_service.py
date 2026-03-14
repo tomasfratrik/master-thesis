@@ -7,7 +7,7 @@ import clip
 import torch
 from PIL import Image
 
-from config import DEVICE, MODEL_NAME, PREVIEWS_DIR, PREVIEW_LIMIT, PREVIEW_URL_PREFIX
+from backend.config import DEVICE, MODEL_NAME, PREVIEWS_DIR, PREVIEW_LIMIT, PREVIEW_URL_PREFIX
 
 
 def _format_class_name(class_name: str) -> str:

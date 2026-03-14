@@ -2,8 +2,8 @@ import torch
 import clip
 from pathlib import Path
 from PIL import Image
-from load_finetuned_clip import load_finetuned_model, test_model
-from config import MODEL_CHECKPOINT
+from backend.load_finetuned_clip import load_finetuned_model, test_model
+from backend.config import MODEL_CHECKPOINT
 
 def test_comprehensive():
     """Test the model comprehensively with only categories from training"""

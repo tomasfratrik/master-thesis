@@ -8,8 +8,8 @@ import numpy as np
 import torch
 from PIL import Image
 
-from config import CLS_META_JSON, DEVICE, FAISS_INDEX, MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
-from model_loader import load_model
+from backend.config import CLS_META_JSON, DEVICE, FAISS_INDEX, MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
+from backend.model_loader import load_model
 
 
 class SneakerLabelService:
@@ -61,9 +61,10 @@ class SneakerLabelService:
             raise ValueError(
                 "Checkpoint class labels do not match the FAISS index metadata. "
                 "This usually means the checkpoint was trained on a different dataset than "
-                "the retrieval index. Use predict_finetuned.py for checkpoint classification, "
-                "or rebuild the embeddings and index with `python embded.py --use-checkpoint` "
-                "followed by `python index.py`. "
+                "the retrieval index. Use `python -m backend.predict_finetuned` for checkpoint "
+                "classification, or rebuild the embeddings and index with "
+                "`python -m backend.embded --use-checkpoint` followed by "
+                "`python -m backend.index`. "
                 f"Checkpoint-only examples: {checkpoint_only or 'none'}. "
                 f"Index-only examples: {index_only or 'none'}."
             )

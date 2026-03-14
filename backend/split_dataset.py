@@ -6,7 +6,8 @@ from typing import Dict, List
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
-PROJECT_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = BACKEND_DIR.parent
 REPO_ROOT = PROJECT_DIR.parent
 
 

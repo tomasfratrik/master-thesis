@@ -6,9 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import PREVIEWS_DIR
+from backend.config import PREVIEWS_DIR
 from backend.app.finetuned_classifier_service import FineTunedSneakerClassifier
-from sneaker_service import SneakerLabelService
+from backend.sneaker_service import SneakerLabelService
 
 app = FastAPI(title="Sneaker Visual Search (Per-Class)")
 app.mount("/previews", StaticFiles(directory=str(PREVIEWS_DIR)), name="previews")

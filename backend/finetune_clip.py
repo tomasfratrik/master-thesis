@@ -10,7 +10,7 @@ from PIL import Image
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
-from config import (
+from backend.config import (
     BATCH_SIZE,
     BEST_CHECKPOINT_PATH,
     DATALOADER_NUM_WORKERS,

@@ -35,7 +35,7 @@ docker-predict:
 	docker run --rm -v $(PWD)/artifacts:/app/artifacts -v $(PWD):/workspace sneaker-labeler:latest --image /workspace/$(IMAGE)
 
 eval-finetuned:
-	./venv/bin/python evaluate_finetuned.py --checkpoint $(CHECKPOINT) --test-root $(TEST_ROOT) --output-json artifacts/eval_finetuned_report.json
+	./venv/bin/python -m backend.evaluate_finetuned --checkpoint $(CHECKPOINT) --test-root $(TEST_ROOT) --output-json artifacts/eval_finetuned_report.json
 
 seed-previews:
-	./venv/bin/python seed_previews.py --source-root $(SOURCE_ROOT)
+	./venv/bin/python -m backend.seed_previews --source-root $(SOURCE_ROOT)

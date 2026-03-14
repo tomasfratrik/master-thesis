@@ -2,7 +2,7 @@ from pathlib import Path
 import torch
 import clip
 
-from config import DEVICE, MODEL_BACKEND, MODEL_NAME, MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
+from backend.config import DEVICE, MODEL_BACKEND, MODEL_NAME, MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
 
 
 def _load_clip(use_checkpoint: bool):

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from config import PREVIEWS_DIR, PROJECT_DIR
+from backend.config import PREVIEWS_DIR, PROJECT_DIR
 
 
 APP_DATA_DIR = PROJECT_DIR / "app_data"

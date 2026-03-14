@@ -9,7 +9,7 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 
-from config import (
+from backend.config import (
     CLS_EMB_NPY,
     CLS_META_JSON,
     DATASET_ROOT,
@@ -17,7 +17,7 @@ from config import (
     IMG_EMB_NPY,
     IMG_META_JSON,
 )
-from model_loader import load_model
+from backend.model_loader import load_model
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 

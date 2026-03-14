@@ -20,7 +20,8 @@ def _float_env(name: str, default: float) -> float:
     return float(value) if value is not None else default
 
 
-PROJECT_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = BACKEND_DIR.parent
 REPO_ROOT = PROJECT_DIR.parent
 
 # Dataset roots

@@ -2,8 +2,8 @@ import torch
 import clip
 from pathlib import Path
 from PIL import Image
-from config import MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
-from model_loader import load_model
+from backend.config import MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
+from backend.model_loader import load_model
 
 def load_finetuned_model(checkpoint_path, device="cuda" if torch.cuda.is_available() else "cpu"):
     """
@@ -77,7 +77,7 @@ if __name__ == "__main__":
 
     if not checkpoint_path.exists():
         print(f"Checkpoint not found at {checkpoint_path}")
-        print("Please train the model first using: python finetune_clip.py")
+        print("Please train the model first using: python -m backend.finetune_clip")
         exit(1)
 
     if not MODEL_USE_CHECKPOINT:

@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from sneaker_service import SneakerLabelService
+from backend.sneaker_service import SneakerLabelService
 
 
 def parse_args() -> argparse.Namespace:

@@ -1,7 +1,7 @@
 import torch
 import clip
-from finetune_clip import SneakerDataset
-from config import DATASET_ROOT
+from backend.finetune_clip import SneakerDataset
+from backend.config import DATASET_ROOT
 
 # Quick dataset test
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
