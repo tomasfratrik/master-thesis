@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import PREVIEWS_DIR
-from finetuned_classifier_service import FineTunedSneakerClassifier
+from .finetuned_classifier_service import FineTunedSneakerClassifier
 
 from .auth import authenticate_user, create_session, create_user, get_current_user
 from .config import APP_MEDIA_URL_PREFIX, MODEL_CHECKPOINT, PREVIEW_DIR, UPLOADS_DIR

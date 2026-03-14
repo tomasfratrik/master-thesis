@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from finetuned_classifier_service import FineTunedSneakerClassifier
+from backend.app.finetuned_classifier_service import FineTunedSneakerClassifier
 
 
 def parse_args() -> argparse.Namespace:

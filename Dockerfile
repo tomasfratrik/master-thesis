@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
 
-ENTRYPOINT ["python", "predict.py"]
+ENTRYPOINT ["uvicorn", "backend.app.api:app", "--host", "0.0.0.0", "--port", "8090"]

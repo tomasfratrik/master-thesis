@@ -4,8 +4,8 @@ from typing import Any
 
 from PIL import Image
 
-from preprocess_service.config import RuntimeOptions
-from preprocess_service.pipeline import PreprocessPipeline
+from .preprocess_service.config import RuntimeOptions
+from .preprocess_service.pipeline import PreprocessPipeline
 
 
 @dataclass

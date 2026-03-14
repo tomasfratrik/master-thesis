@@ -7,8 +7,8 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 
+from backend.app.finetuned_classifier_service import FineTunedSneakerClassifier
 from config import TEST_SPLIT_ROOT
-from finetuned_classifier_service import FineTunedSneakerClassifier
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}

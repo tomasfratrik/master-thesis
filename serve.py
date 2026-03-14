@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import PREVIEWS_DIR
-from finetuned_classifier_service import FineTunedSneakerClassifier
+from backend.app.finetuned_classifier_service import FineTunedSneakerClassifier
 from sneaker_service import SneakerLabelService
 
 app = FastAPI(title="Sneaker Visual Search (Per-Class)")

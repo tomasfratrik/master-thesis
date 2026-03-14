@@ -26,7 +26,7 @@ install: venv-install
 	pip install git+https://github.com/openai/CLIP.git
 
 run-app-backend:
-	./venv/bin/uvicorn app_backend.api:app --host 0.0.0.0 --port 8090
+	./venv/bin/uvicorn backend.app.api:app --host 0.0.0.0 --port 8090
 
 docker-build:
 	docker build -t sneaker-labeler:latest .
