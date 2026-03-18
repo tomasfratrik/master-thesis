@@ -16,19 +16,51 @@
 	let response = null;
 	let expandedPreviewKeys = new Set();
 	let expandedTopKKeys = new Set();
+	let lightbox = null;
+
+	function fileId(file, index) {
+		return `${file.name}-${file.size}-${file.lastModified}-${index}`;
+	}
 
 	function syncPreviews(files) {
 		for (const preview of filePreviews) {
 			URL.revokeObjectURL(preview.url);
 		}
-		filePreviews = files.map((file) => ({
+		filePreviews = files.map((file, index) => ({
+			id: fileId(file, index),
 			name: file.name,
 			url: URL.createObjectURL(file)
 		}));
 	}
 
-	function updateFiles(list) {
-		selectedFiles = Array.from(list || []);
+	function mergeFiles(currentFiles, nextFiles) {
+		const merged = [...currentFiles];
+		for (const file of nextFiles) {
+			const exists = merged.some(
+				(current) =>
+					current.name === file.name &&
+					current.size === file.size &&
+					current.lastModified === file.lastModified
+			);
+			if (!exists) {
+				merged.push(file);
+			}
+		}
+		return merged;
+	}
+
+	function updateFiles(list, append = false) {
+		const nextFiles = Array.from(list || []);
+		selectedFiles = append ? mergeFiles(selectedFiles, nextFiles) : nextFiles;
+		syncPreviews(selectedFiles);
+		response = null;
+		error = '';
+		expandedPreviewKeys = new Set();
+		expandedTopKKeys = new Set();
+	}
+
+	function removeFile(index) {
+		selectedFiles = selectedFiles.filter((_, currentIndex) => currentIndex !== index);
 		syncPreviews(selectedFiles);
 		response = null;
 		error = '';
@@ -81,6 +113,14 @@
 			next.add(key);
 		}
 		expandedTopKKeys = next;
+	}
+
+	function openLightbox(src, label) {
+		lightbox = { src, label };
+	}
+
+	function closeLightbox() {
+		lightbox = null;
 	}
 
 	async function analyze() {
@@ -175,7 +215,10 @@
 					type="file"
 					accept="image/*"
 					multiple
-					onchange={(event) => updateFiles(event.currentTarget.files)}
+					onchange={(event) => {
+						updateFiles(event.currentTarget.files, true);
+						event.currentTarget.value = '';
+					}}
 				/>
 				<div>
 					<strong>Drop or browse sneaker photos</strong>
@@ -187,9 +230,17 @@
 
 			{#if filePreviews.length > 0}
 				<div class="upload-preview-grid">
-					{#each filePreviews as file}
+					{#each filePreviews as file, index}
 						<figure class="upload-preview-card">
-							<img src={file.url} alt={file.name} />
+							<button class="image-action remove" type="button" onclick={() => removeFile(index)}>
+								×
+							</button>
+							<button class="image-action expand" type="button" onclick={() => openLightbox(file.url, file.name)}>
+								Expand
+							</button>
+							<div class="image-frame upload-frame">
+								<img src={file.url} alt={file.name} />
+							</div>
 							<figcaption>{file.name}</figcaption>
 						</figure>
 					{/each}
@@ -284,11 +335,16 @@
 						<div class="analyzed-grid">
 							{#each response.processed_images as image}
 								<figure class="analyzed-card">
-									<img src={image.data_url} alt={image.filename} />
-									<figcaption>
-										<strong>{image.filename}</strong>
-										<span>{image.source}</span>
-									</figcaption>
+									<button
+										class="image-action expand"
+										type="button"
+										onclick={() => openLightbox(image.data_url, image.filename)}
+									>
+										Expand
+									</button>
+									<div class="image-frame analyzed-frame">
+										<img src={image.data_url} alt={image.filename} />
+									</div>
 								</figure>
 							{/each}
 						</div>
@@ -340,7 +396,18 @@
 									<div class="preview-grid">
 										{#if candidate.preview_urls?.length}
 											{#each candidate.preview_urls as url}
-												<img src={previewUrl(url)} alt={candidate.label} />
+												<div class="preview-tile">
+													<button
+														class="image-action expand"
+														type="button"
+														onclick={() => openLightbox(previewUrl(url), candidate.label)}
+													>
+														Expand
+													</button>
+													<div class="image-frame preview-frame">
+														<img src={previewUrl(url)} alt={candidate.label} />
+													</div>
+												</div>
 											{/each}
 										{:else}
 											<p class="empty-inline">No preview images available.</p>
@@ -358,7 +425,16 @@
 							<div class="winner-card">
 								{#if result.processed_image}
 									<div class="winner-image">
-										<img src={result.processed_image.data_url} alt={result.query_filename} />
+										<button
+											class="image-action expand"
+											type="button"
+											onclick={() => openLightbox(result.processed_image.data_url, result.query_filename)}
+										>
+											Expand
+										</button>
+										<div class="image-frame winner-frame">
+											<img src={result.processed_image.data_url} alt={result.query_filename} />
+										</div>
 									</div>
 								{/if}
 								<div>
@@ -405,7 +481,18 @@
 												<div class="preview-grid">
 													{#if candidate.preview_urls?.length}
 														{#each candidate.preview_urls as url}
-															<img src={previewUrl(url)} alt={candidate.label} />
+															<div class="preview-tile">
+																<button
+																	class="image-action expand"
+																	type="button"
+																	onclick={() => openLightbox(previewUrl(url), candidate.label)}
+																>
+																	Expand
+																</button>
+																<div class="image-frame preview-frame">
+																	<img src={previewUrl(url)} alt={candidate.label} />
+																</div>
+															</div>
 														{/each}
 													{:else}
 														<p class="empty-inline">No preview images available.</p>
@@ -421,6 +508,25 @@
 				</div>
 			{/if}
 		</section>
+	{/if}
+
+	{#if lightbox}
+		<div class="lightbox-backdrop" role="button" tabindex="0" onclick={closeLightbox} onkeydown={(event) => event.key === 'Escape' && closeLightbox()}>
+			<div
+				class="lightbox-panel"
+				role="dialog"
+				aria-modal="true"
+				tabindex="-1"
+				onclick={(event) => event.stopPropagation()}
+				onkeydown={(event) => event.stopPropagation()}
+			>
+				<button class="image-action remove lightbox-close" type="button" onclick={closeLightbox}>×</button>
+				<div class="lightbox-frame">
+					<img src={lightbox.src} alt={lightbox.label} />
+				</div>
+				<p>{lightbox.label}</p>
+			</div>
+		</div>
 	{/if}
 </section>
 
@@ -493,26 +599,43 @@
 	}
 
 	.upload-preview-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		display: flex;
+		flex-wrap: wrap;
 		gap: 0.8rem;
 		margin-top: 1rem;
 	}
 
 	.upload-preview-card {
+		position: relative;
 		margin: 0;
 		padding: 0.65rem;
+		width: 180px;
 		border: 1px solid rgba(77, 58, 46, 0.12);
 		border-radius: 18px;
 		background: rgba(255, 255, 255, 0.76);
 	}
 
-	.upload-preview-card img {
+	.image-frame {
+		display: grid;
+		place-items: center;
+		overflow: hidden;
+		border-radius: 12px;
+		background: rgba(239, 231, 218, 0.55);
+	}
+
+	.upload-frame,
+	.analyzed-frame,
+	.preview-frame,
+	.winner-frame {
+		width: 100%;
+		height: 150px;
+	}
+
+	.image-frame img {
 		display: block;
 		width: 100%;
-		height: 110px;
-		object-fit: cover;
-		border-radius: 12px;
+		height: 100%;
+		object-fit: contain;
 	}
 
 	.upload-preview-card figcaption {
@@ -520,6 +643,35 @@
 		color: var(--site-text-muted);
 		font-size: 0.8rem;
 		word-break: break-word;
+	}
+
+	.image-action {
+		position: absolute;
+		z-index: 1;
+		padding: 0.4rem 0.65rem;
+		border: none;
+		border-radius: 999px;
+		background: rgba(24, 21, 18, 0.8);
+		color: #fff4ec;
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.image-action.expand {
+		top: 0.95rem;
+		right: 0.9rem;
+	}
+
+	.image-action.remove {
+		top: 0.95rem;
+		left: 0.9rem;
+		width: 2rem;
+		height: 2rem;
+		padding: 0;
+		font-size: 1.1rem;
+		line-height: 1;
 	}
 
 	.aggregation-block {
@@ -611,41 +763,20 @@
 	}
 
 	.analyzed-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+		display: flex;
+		flex-wrap: wrap;
 		gap: 0.8rem;
 		margin-top: 0.75rem;
 	}
 
 	.analyzed-card {
+		position: relative;
 		margin: 0;
 		padding: 0.7rem;
+		width: 220px;
 		border: 1px solid rgba(77, 58, 46, 0.12);
 		border-radius: 18px;
 		background: rgba(255, 255, 255, 0.76);
-	}
-
-	.analyzed-card img,
-	.winner-image img {
-		display: block;
-		width: 100%;
-		height: 140px;
-		object-fit: cover;
-		border-radius: 12px;
-	}
-
-	.analyzed-card figcaption {
-		display: grid;
-		gap: 0.2rem;
-		margin-top: 0.55rem;
-	}
-
-	.analyzed-card figcaption span {
-		color: var(--site-text-muted);
-		font-size: 0.78rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
 	}
 
 	.winner-card {
@@ -660,6 +791,7 @@
 	}
 
 	.winner-image {
+		position: relative;
 		flex: 0 0 160px;
 	}
 
@@ -767,24 +899,70 @@
 	}
 
 	.preview-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		display: flex;
+		flex-wrap: wrap;
 		gap: 0.7rem;
 		margin-top: 0.9rem;
 	}
 
-	.preview-grid img {
-		display: block;
-		width: 100%;
+	.preview-tile {
+		position: relative;
+		width: 150px;
+	}
+
+	.preview-frame {
 		height: 120px;
-		object-fit: cover;
-		border-radius: 14px;
 		border: 1px solid rgba(77, 58, 46, 0.1);
 	}
 
 	.empty-inline {
 		margin: 0;
 		color: var(--site-text-muted);
+	}
+
+	.lightbox-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 30;
+		display: grid;
+		place-items: center;
+		padding: 1.25rem;
+		background: rgba(16, 12, 10, 0.72);
+	}
+
+	.lightbox-panel {
+		position: relative;
+		width: min(90vw, 900px);
+		padding: 1rem;
+		border-radius: 24px;
+		background: rgba(255, 252, 247, 0.98);
+	}
+
+	.lightbox-frame {
+		display: grid;
+		place-items: center;
+		max-height: 75vh;
+		overflow: hidden;
+		border-radius: 18px;
+		background: rgba(239, 231, 218, 0.55);
+	}
+
+	.lightbox-frame img {
+		display: block;
+		max-width: 100%;
+		max-height: 75vh;
+		object-fit: contain;
+	}
+
+	.lightbox-panel p {
+		margin: 0.75rem 0 0;
+		color: var(--site-text-soft);
+	}
+
+	.lightbox-close {
+		top: 1rem;
+		right: 1rem;
+		left: auto;
 	}
 
 	@media (max-width: 900px) {
