@@ -10,6 +10,7 @@ from .preprocess_service.pipeline import PreprocessPipeline
 
 @dataclass
 class PreparedImage:
+    input_filename: str
     original_filename: str
     mime_type: str
     image_bytes: bytes
@@ -100,6 +101,7 @@ def preprocess_uploads(
         if not outputs:
             prepared.append(
                 PreparedImage(
+                    input_filename=filename,
                     original_filename=filename,
                     image_bytes=payload,
                     mime_type=mime_type,
@@ -108,16 +110,29 @@ def preprocess_uploads(
             )
             continue
 
-        first_output = outputs[0]
-        image = first_output["image"]
-        image_format = str(first_output.get("format") or "JPEG")
-        prepared.append(
-            PreparedImage(
-                original_filename=first_output.get("name") or filename,
-                image_bytes=_image_to_bytes(image, image_format),
-                mime_type=f"image/{image_format.lower()}",
-                source="preprocessed",
+        if len(outputs) > 1:
+            warnings.append(
+                {
+                    "code": "preprocess_multiple_crops_detected",
+                    "filename": filename,
+                    "message": (
+                        f"Multiple sneaker crops were detected in {filename}. "
+                        "All detected sneakers will be analyzed."
+                    ),
+                }
             )
-        )
+
+        for output in outputs:
+            image = output["image"]
+            image_format = str(output.get("format") or "JPEG")
+            prepared.append(
+                PreparedImage(
+                    input_filename=filename,
+                    original_filename=output.get("name") or filename,
+                    image_bytes=_image_to_bytes(image, image_format),
+                    mime_type=f"image/{image_format.lower()}",
+                    source="preprocessed",
+                )
+            )
 
     return PreprocessOutcome(images=prepared, warnings=warnings)

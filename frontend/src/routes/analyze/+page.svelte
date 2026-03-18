@@ -53,6 +53,13 @@
 		return `${prefix}-${index}`;
 	}
 
+	function warningText(warning) {
+		if (warning.code === 'preprocess_multiple_crops_detected' && mode === 'grouped') {
+			return `${warning.message} In One Sneaker mode, all detected crops are combined, so keep only the target sneaker visible from different angles.`;
+		}
+		return warning.message;
+	}
+
 	function togglePreview(key) {
 		const next = new Set(expandedPreviewKeys);
 		if (next.has(key)) {
@@ -250,7 +257,7 @@
 				<div class="warning-stack">
 					{#each response.warnings as warning}
 						<div class="alert alert-warning/10 warning-alert">
-							<span>{warning.message}</span>
+							<span>{warningText(warning)}</span>
 						</div>
 					{/each}
 				</div>
@@ -287,6 +294,7 @@
 					</div>
 					<div class="winner-badges">
 						<span>{response.query_image_count} photos</span>
+						<span>{response.processed_image_count} crops</span>
 						<span>{result.aggregation}</span>
 					</div>
 				</div>
@@ -334,6 +342,7 @@
 								{/if}
 								<div>
 									<p class="winner-label">{result.query_filename}</p>
+									<p class="processed-name">{result.processed_filename}</p>
 									<h2>{result.label}</h2>
 									<p class="winner-meta">Score {prettyPercent(result.score)}</p>
 								</div>
@@ -640,6 +649,12 @@
 		gap: 0.8rem;
 		margin: 0.55rem 0 0;
 		color: var(--site-text-soft);
+	}
+
+	.processed-name {
+		margin: 0.35rem 0 0;
+		color: var(--site-text-muted);
+		font-size: 0.82rem;
 	}
 
 	.winner-badges {

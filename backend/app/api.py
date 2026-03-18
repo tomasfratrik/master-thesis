@@ -124,6 +124,7 @@ def _admin_user_counts() -> int:
 def _prepared_image_payload(prepared: PreparedImage) -> dict[str, str]:
     encoded = base64.b64encode(prepared.image_bytes).decode("ascii")
     return {
+        "input_filename": prepared.input_filename,
         "filename": prepared.original_filename,
         "mime_type": prepared.mime_type,
         "source": prepared.source,
@@ -178,6 +179,7 @@ def _prepare_prediction_payload(
             "mode": mode,
             "top_k": top_k,
             "query_image_count": len(uploads),
+            "processed_image_count": len(prepared_images),
             "aggregation": aggregation,
             "warnings": warnings,
             "processed_images": [_prepared_image_payload(item) for item in prepared_images],
@@ -185,14 +187,14 @@ def _prepare_prediction_payload(
         }
 
     results: list[dict[str, Any]] = []
-    for upload, prepared in zip(uploads, prepared_images):
-        filename, _, _ = upload
+    for prepared in prepared_images:
         prediction = classifier.predict_image_bytes(
             prepared.image_bytes,
             k=top_k,
             aggregation="embedding_mean",
         )
-        prediction["query_filename"] = filename
+        prediction["query_filename"] = prepared.input_filename
+        prediction["processed_filename"] = prepared.original_filename
         prediction["prepared_source"] = prepared.source
         prediction["processed_image"] = _prepared_image_payload(prepared)
         results.append(prediction)
@@ -201,6 +203,7 @@ def _prepare_prediction_payload(
         "mode": mode,
         "top_k": top_k,
         "query_image_count": len(uploads),
+        "processed_image_count": len(prepared_images),
         "warnings": warnings,
         "results": results,
     }
