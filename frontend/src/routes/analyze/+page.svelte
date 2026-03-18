@@ -15,6 +15,7 @@
 	let error = '';
 	let response = null;
 	let expandedPreviewKeys = new Set();
+	let expandedTopKKeys = new Set();
 
 	function syncPreviews(files) {
 		for (const preview of filePreviews) {
@@ -32,6 +33,7 @@
 		response = null;
 		error = '';
 		expandedPreviewKeys = new Set();
+		expandedTopKKeys = new Set();
 	}
 
 	function toggleMode(nextMode) {
@@ -39,6 +41,7 @@
 		response = null;
 		error = '';
 		expandedPreviewKeys = new Set();
+		expandedTopKKeys = new Set();
 	}
 
 	function prettyPercent(score) {
@@ -55,7 +58,7 @@
 
 	function warningText(warning) {
 		if (warning.code === 'preprocess_multiple_crops_detected' && mode === 'grouped') {
-			return `${warning.message} In One Sneaker mode, all detected crops are combined, so keep only the target sneaker visible from different angles.`;
+			return `${warning.message} In One Sneaker mode, all detected crops are combined, so keep only the target sneaker visible from different angles. Switch to Multiple Sneakers if you want one result per detected crop.`;
 		}
 		return warning.message;
 	}
@@ -70,6 +73,16 @@
 		expandedPreviewKeys = next;
 	}
 
+	function toggleTopK(key) {
+		const next = new Set(expandedTopKKeys);
+		if (next.has(key)) {
+			next.delete(key);
+		} else {
+			next.add(key);
+		}
+		expandedTopKKeys = next;
+	}
+
 	async function analyze() {
 		if (selectedFiles.length === 0) {
 			error = 'Select at least one image.';
@@ -80,6 +93,7 @@
 		error = '';
 		response = null;
 		expandedPreviewKeys = new Set();
+		expandedTopKKeys = new Set();
 
 		try {
 			const formData = new FormData();
@@ -151,7 +165,7 @@
 				{#if mode === 'grouped'}
 					All uploaded images will be treated as different views of the same sneaker.
 				{:else}
-					Each uploaded image will be analyzed separately.
+					Each uploaded image will be analyzed separately, and the system will try to find all sneakers visible in each image.
 				{/if}
 			</p>
 
@@ -299,37 +313,44 @@
 					</div>
 				</div>
 
-				<div class="result-list">
-					{#each result.top_k as candidate, index}
-						{@const key = previewKey('grouped', index)}
-						<article class="result-card">
-							<div class="result-head">
-								<div>
-									<p class="result-rank">#{index + 1}</p>
-									<h3>{candidate.label}</h3>
-								</div>
-								<strong>{prettyPercent(candidate.score)}</strong>
-							</div>
-							<progress class="progress progress-info w-full" value={candidate.score * 100} max="100"></progress>
-							<div class="result-actions">
-								<button class="button ghost compact" type="button" onclick={() => togglePreview(key)}>
-									{expandedPreviewKeys.has(key) ? 'Hide previews' : 'Show previews'}
-								</button>
-							</div>
-							{#if expandedPreviewKeys.has(key)}
-								<div class="preview-grid">
-									{#if candidate.preview_urls?.length}
-										{#each candidate.preview_urls as url}
-											<img src={previewUrl(url)} alt={candidate.label} />
-										{/each}
-									{:else}
-										<p class="empty-inline">No preview images available.</p>
-									{/if}
-								</div>
-							{/if}
-						</article>
-					{/each}
+				<div class="topk-toggle-row">
+					<button class="button ghost compact" type="button" onclick={() => toggleTopK('grouped-topk')}>
+						{expandedTopKKeys.has('grouped-topk') ? 'Hide top 5 results' : 'Show top 5 results'}
+					</button>
 				</div>
+				{#if expandedTopKKeys.has('grouped-topk')}
+					<div class="result-list">
+						{#each result.top_k as candidate, index}
+							{@const key = previewKey('grouped', index)}
+							<article class="result-card">
+								<div class="result-head">
+									<div>
+										<p class="result-rank">#{index + 1}</p>
+										<h3>{candidate.label}</h3>
+									</div>
+									<strong>{prettyPercent(candidate.score)}</strong>
+								</div>
+								<progress class="progress progress-info w-full" value={candidate.score * 100} max="100"></progress>
+								<div class="result-actions">
+									<button class="button ghost compact" type="button" onclick={() => togglePreview(key)}>
+										{expandedPreviewKeys.has(key) ? 'Hide previews' : 'Show previews'}
+									</button>
+								</div>
+								{#if expandedPreviewKeys.has(key)}
+									<div class="preview-grid">
+										{#if candidate.preview_urls?.length}
+											{#each candidate.preview_urls as url}
+												<img src={previewUrl(url)} alt={candidate.label} />
+											{/each}
+										{:else}
+											<p class="empty-inline">No preview images available.</p>
+										{/if}
+									</div>
+								{/if}
+							</article>
+						{/each}
+					</div>
+				{/if}
 			{:else}
 				<div class="per-image-stack">
 					{#each response.results as result, resultIndex}
@@ -351,37 +372,50 @@
 								</div>
 							</div>
 
-							<div class="result-list compact-list">
-								{#each result.top_k as candidate, index}
-									{@const key = previewKey(`per-${resultIndex}`, index)}
-									<article class="result-card">
-										<div class="result-head">
-											<div>
-												<p class="result-rank">#{index + 1}</p>
-												<h3>{candidate.label}</h3>
-											</div>
-											<strong>{prettyPercent(candidate.score)}</strong>
-										</div>
-										<progress class="progress progress-info w-full" value={candidate.score * 100} max="100"></progress>
-										<div class="result-actions">
-											<button class="button ghost compact" type="button" onclick={() => togglePreview(key)}>
-												{expandedPreviewKeys.has(key) ? 'Hide previews' : 'Show previews'}
-											</button>
-										</div>
-										{#if expandedPreviewKeys.has(key)}
-											<div class="preview-grid">
-												{#if candidate.preview_urls?.length}
-													{#each candidate.preview_urls as url}
-														<img src={previewUrl(url)} alt={candidate.label} />
-													{/each}
-												{:else}
-													<p class="empty-inline">No preview images available.</p>
-												{/if}
-											</div>
-										{/if}
-									</article>
-								{/each}
+							<div class="topk-toggle-row">
+								<button
+									class="button ghost compact"
+									type="button"
+									onclick={() => toggleTopK(`per-topk-${resultIndex}`)}
+								>
+									{expandedTopKKeys.has(`per-topk-${resultIndex}`)
+										? 'Hide top 5 results'
+										: 'Show top 5 results'}
+								</button>
 							</div>
+							{#if expandedTopKKeys.has(`per-topk-${resultIndex}`)}
+								<div class="result-list compact-list">
+									{#each result.top_k as candidate, index}
+										{@const key = previewKey(`per-${resultIndex}`, index)}
+										<article class="result-card">
+											<div class="result-head">
+												<div>
+													<p class="result-rank">#{index + 1}</p>
+													<h3>{candidate.label}</h3>
+												</div>
+												<strong>{prettyPercent(candidate.score)}</strong>
+											</div>
+											<progress class="progress progress-info w-full" value={candidate.score * 100} max="100"></progress>
+											<div class="result-actions">
+												<button class="button ghost compact" type="button" onclick={() => togglePreview(key)}>
+													{expandedPreviewKeys.has(key) ? 'Hide previews' : 'Show previews'}
+												</button>
+											</div>
+											{#if expandedPreviewKeys.has(key)}
+												<div class="preview-grid">
+													{#if candidate.preview_urls?.length}
+														{#each candidate.preview_urls as url}
+															<img src={previewUrl(url)} alt={candidate.label} />
+														{/each}
+													{:else}
+														<p class="empty-inline">No preview images available.</p>
+													{/if}
+												</div>
+											{/if}
+										</article>
+									{/each}
+								</div>
+							{/if}
 						</section>
 					{/each}
 				</div>
@@ -681,6 +715,10 @@
 		display: grid;
 		gap: 0.95rem;
 		margin-top: 1.2rem;
+	}
+
+	.topk-toggle-row {
+		margin-top: 1rem;
 	}
 
 	.per-image-card {
