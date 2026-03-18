@@ -16,6 +16,12 @@ class PreparedImage:
     source: str
 
 
+@dataclass
+class PreprocessOutcome:
+    images: list[PreparedImage]
+    warnings: list[dict[str, str]]
+
+
 pipeline = PreprocessPipeline()
 
 
@@ -31,11 +37,12 @@ def _image_to_bytes(image: Any, image_format: str) -> bytes:
 
 def preprocess_uploads(
     uploads: list[tuple[str, bytes, str]],
-) -> list[PreparedImage]:
+) -> PreprocessOutcome:
     if not uploads:
-        return []
+        return PreprocessOutcome(images=[], warnings=[])
 
     prepared: list[PreparedImage] = []
+    warnings: list[dict[str, str]] = []
     for filename, payload, mime_type in uploads:
         runtime = RuntimeOptions()
         try:
@@ -44,14 +51,50 @@ def preprocess_uploads(
                 image_bytes=payload,
                 runtime=runtime,
             )
-        except BaseException:
-            # If crop-model dependencies are unavailable, fall back to the rest of the
-            # preprocessing pipeline rather than failing the whole request.
+        except BaseException as error:
+            # If crop-model dependencies are unavailable or the preprocessing step
+            # fails unexpectedly, fall back to the rest of the pipeline rather than
+            # failing the whole request.
             result = pipeline.process_single_image(
                 filename=filename,
                 image_bytes=payload,
                 runtime=RuntimeOptions(disabled_steps=["crop_sneakers"]),
             )
+            warnings.append(
+                {
+                    "code": "preprocess_crop_skipped",
+                    "filename": filename,
+                    "message": (
+                        "Sneaker crop step failed, so the original image was used after "
+                        f"fallback. ({type(error).__name__})"
+                    ),
+                }
+            )
+
+        crop_runs = (result.get("metadata") or {}).get("crop_sneakers") or []
+        for crop_meta in crop_runs:
+            fallback = crop_meta.get("device_fallback")
+            if fallback:
+                warnings.append(
+                    {
+                        "code": "preprocess_cuda_oom_cpu_retry",
+                        "filename": filename,
+                        "message": (
+                            "GPU ran out of memory during sneaker cropping. "
+                            f"Retried on {fallback['to']}."
+                        ),
+                    }
+                )
+            if crop_meta.get("used_original"):
+                warnings.append(
+                    {
+                        "code": "preprocess_used_original",
+                        "filename": filename,
+                        "message": (
+                            "No sneaker crop was detected, so the original image was analyzed."
+                        ),
+                    }
+                )
 
         outputs = result.get("outputs") or []
         if not outputs:
@@ -77,4 +120,4 @@ def preprocess_uploads(
             )
         )
 
-    return prepared
+    return PreprocessOutcome(images=prepared, warnings=warnings)

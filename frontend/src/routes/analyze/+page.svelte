@@ -246,8 +246,34 @@
 	{#if response}
 		<section class="panel section-card">
 			<p class="eyebrow">Results</p>
+			{#if response.warnings?.length}
+				<div class="warning-stack">
+					{#each response.warnings as warning}
+						<div class="alert alert-warning/10 warning-alert">
+							<span>{warning.message}</span>
+						</div>
+					{/each}
+				</div>
+			{/if}
 			{#if response.mode === 'grouped'}
 				{@const result = response.result}
+				{#if response.processed_images?.length}
+					<div class="analyzed-block">
+						<p class="eyebrow">Analyzed Images</p>
+						<div class="analyzed-grid">
+							{#each response.processed_images as image}
+								<figure class="analyzed-card">
+									<img src={image.data_url} alt={image.filename} />
+									<figcaption>
+										<strong>{image.filename}</strong>
+										<span>{image.source}</span>
+									</figcaption>
+								</figure>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
 				<div class="winner-card">
 					<div>
 						<p class="winner-label">Top match</p>
@@ -301,6 +327,11 @@
 					{#each response.results as result, resultIndex}
 						<section class="per-image-card">
 							<div class="winner-card">
+								{#if result.processed_image}
+									<div class="winner-image">
+										<img src={result.processed_image.data_url} alt={result.query_filename} />
+									</div>
+								{/if}
 								<div>
 									<p class="winner-label">{result.query_filename}</p>
 									<h2>{result.label}</h2>
@@ -522,6 +553,58 @@
 		border-radius: 18px;
 	}
 
+	.warning-stack {
+		display: grid;
+		gap: 0.75rem;
+		margin-bottom: 1rem;
+	}
+
+	.warning-alert {
+		border-radius: 18px;
+	}
+
+	.analyzed-block {
+		margin-bottom: 1rem;
+	}
+
+	.analyzed-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+		gap: 0.8rem;
+		margin-top: 0.75rem;
+	}
+
+	.analyzed-card {
+		margin: 0;
+		padding: 0.7rem;
+		border: 1px solid rgba(77, 58, 46, 0.12);
+		border-radius: 18px;
+		background: rgba(255, 255, 255, 0.76);
+	}
+
+	.analyzed-card img,
+	.winner-image img {
+		display: block;
+		width: 100%;
+		height: 140px;
+		object-fit: cover;
+		border-radius: 12px;
+	}
+
+	.analyzed-card figcaption {
+		display: grid;
+		gap: 0.2rem;
+		margin-top: 0.55rem;
+	}
+
+	.analyzed-card figcaption span {
+		color: var(--site-text-muted);
+		font-size: 0.78rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
 	.winner-card {
 		display: flex;
 		align-items: start;
@@ -531,6 +614,10 @@
 		border: 1px solid rgba(77, 58, 46, 0.12);
 		border-radius: 24px;
 		background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(244, 236, 227, 0.95));
+	}
+
+	.winner-image {
+		flex: 0 0 160px;
 	}
 
 	.winner-label {
@@ -654,6 +741,11 @@
 
 		.winner-card {
 			flex-direction: column;
+		}
+
+		.winner-image {
+			width: 100%;
+			flex-basis: auto;
 		}
 	}
 </style>

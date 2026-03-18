@@ -1,3 +1,4 @@
+import base64
 import json
 import mimetypes
 import uuid
@@ -120,6 +121,16 @@ def _admin_user_counts() -> int:
     return int(row["count"]) if row is not None else 0
 
 
+def _prepared_image_payload(prepared: PreparedImage) -> dict[str, str]:
+    encoded = base64.b64encode(prepared.image_bytes).decode("ascii")
+    return {
+        "filename": prepared.original_filename,
+        "mime_type": prepared.mime_type,
+        "source": prepared.source,
+        "data_url": f"data:{prepared.mime_type};base64,{encoded}",
+    }
+
+
 async def _read_uploads(files: list[UploadFile]) -> list[tuple[str, bytes, str]]:
     uploads: list[tuple[str, bytes, str]] = []
     for file in files:
@@ -138,13 +149,20 @@ def _prepare_prediction_payload(
     mode: Literal["grouped", "per_image"],
     aggregation: Literal["embedding_mean", "logit_mean", "prob_mean"],
     prepared_images: list[PreparedImage] | None = None,
+    warnings: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     if classifier is None:
         raise HTTPException(status_code=503, detail=f"Predictor unavailable: {classifier_error}")
     if not uploads:
         raise HTTPException(status_code=400, detail="At least one non-empty file is required.")
 
-    prepared_images = prepared_images or preprocess_uploads(uploads)
+    if prepared_images is None:
+        preprocess_outcome = preprocess_uploads(uploads)
+        prepared_images = preprocess_outcome.images
+        warnings = preprocess_outcome.warnings
+    else:
+        warnings = warnings or []
+
     if not prepared_images:
         raise HTTPException(status_code=422, detail="Preprocess step produced no usable images.")
 
@@ -161,6 +179,8 @@ def _prepare_prediction_payload(
             "top_k": top_k,
             "query_image_count": len(uploads),
             "aggregation": aggregation,
+            "warnings": warnings,
+            "processed_images": [_prepared_image_payload(item) for item in prepared_images],
             "result": result,
         }
 
@@ -174,12 +194,14 @@ def _prepare_prediction_payload(
         )
         prediction["query_filename"] = filename
         prediction["prepared_source"] = prepared.source
+        prediction["processed_image"] = _prepared_image_payload(prepared)
         results.append(prediction)
 
     return {
         "mode": mode,
         "top_k": top_k,
         "query_image_count": len(uploads),
+        "warnings": warnings,
         "results": results,
     }
 
@@ -499,13 +521,15 @@ async def analyze_catalog_item(
     _catalog_or_404(catalog_id=catalog_id, user_id=current_user["id"])
 
     uploads = await _read_uploads(files)
-    prepared_images = preprocess_uploads(uploads)
+    preprocess_outcome = preprocess_uploads(uploads)
+    prepared_images = preprocess_outcome.images
     payload = _prepare_prediction_payload(
         uploads,
         top_k=top_k,
         mode="grouped",
         aggregation=aggregation,
         prepared_images=prepared_images,
+        warnings=preprocess_outcome.warnings,
     )
     prediction = payload["result"]
 

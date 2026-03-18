@@ -8,7 +8,12 @@ from PIL import Image
 from ..config import CropSneakersConfig, CropSneakersRuntimeConfig
 from ..vendor.crop_sneakers.detection import finalize_detections
 from ..vendor.crop_sneakers.geometry import clamp_box
-from ..vendor.crop_sneakers.model import detect_raw_boxes, load_detector
+from ..vendor.crop_sneakers.model import (
+    detect_raw_boxes,
+    fallback_to_cpu,
+    is_cuda_oom_error,
+    load_detector,
+)
 
 
 class CropSneakersStep:
@@ -50,17 +55,40 @@ class CropSneakersStep:
         if self._processor is None or self._model is None or self._device is None:
             raise RuntimeError("CropSneakersStep was not initialized correctly.")
 
-        raw_detections = detect_raw_boxes(
-            image=image,
-            processor=self._processor,
-            model=self._model,
-            device=self._device,
-            labels=self._resolve(self.config.labels, runtime.labels),
-            box_threshold=self._resolve(self.config.box_threshold, runtime.box_threshold),
-            text_threshold=self._resolve(
-                self.config.text_threshold, runtime.text_threshold
-            ),
-        )
+        device_fallback: dict[str, str] | None = None
+        try:
+            raw_detections = detect_raw_boxes(
+                image=image,
+                processor=self._processor,
+                model=self._model,
+                device=self._device,
+                labels=self._resolve(self.config.labels, runtime.labels),
+                box_threshold=self._resolve(self.config.box_threshold, runtime.box_threshold),
+                text_threshold=self._resolve(
+                    self.config.text_threshold, runtime.text_threshold
+                ),
+            )
+        except Exception as exc:
+            if not is_cuda_oom_error(exc, self._device):
+                raise
+            previous_device = self._device
+            self._model, self._device = fallback_to_cpu(self._model)
+            device_fallback = {
+                "from": previous_device,
+                "to": self._device,
+                "reason": "cuda_oom",
+            }
+            raw_detections = detect_raw_boxes(
+                image=image,
+                processor=self._processor,
+                model=self._model,
+                device=self._device,
+                labels=self._resolve(self.config.labels, runtime.labels),
+                box_threshold=self._resolve(self.config.box_threshold, runtime.box_threshold),
+                text_threshold=self._resolve(
+                    self.config.text_threshold, runtime.text_threshold
+                ),
+            )
 
         detections = finalize_detections(
             raw_detections=raw_detections,
@@ -133,4 +161,5 @@ class CropSneakersStep:
             "count": len(crop_metadata),
             "used_original": used_original,
             "device": self._device,
+            "device_fallback": device_fallback,
         }
