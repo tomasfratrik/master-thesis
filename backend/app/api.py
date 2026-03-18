@@ -23,7 +23,7 @@ from .auth import (
 from .catalog_metadata import build_brand_prefix_map, format_class_label
 from .config import APP_MEDIA_URL_PREFIX, MODEL_CHECKPOINT, PREVIEW_DIR, UPLOADS_DIR
 from .db import get_connection, init_db, utc_now
-from .preprocess_client import preprocess_uploads
+from .preprocess_client import PreparedImage, preprocess_uploads
 
 
 app = FastAPI(title="Sneaker Catalog App Backend")
@@ -120,6 +120,70 @@ def _admin_user_counts() -> int:
     return int(row["count"]) if row is not None else 0
 
 
+async def _read_uploads(files: list[UploadFile]) -> list[tuple[str, bytes, str]]:
+    uploads: list[tuple[str, bytes, str]] = []
+    for file in files:
+        payload = await file.read()
+        if not payload:
+            continue
+        mime_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
+        uploads.append((file.filename or "upload", payload, mime_type))
+    return uploads
+
+
+def _prepare_prediction_payload(
+    uploads: list[tuple[str, bytes, str]],
+    *,
+    top_k: int,
+    mode: Literal["grouped", "per_image"],
+    aggregation: Literal["embedding_mean", "logit_mean", "prob_mean"],
+    prepared_images: list[PreparedImage] | None = None,
+) -> dict[str, Any]:
+    if classifier is None:
+        raise HTTPException(status_code=503, detail=f"Predictor unavailable: {classifier_error}")
+    if not uploads:
+        raise HTTPException(status_code=400, detail="At least one non-empty file is required.")
+
+    prepared_images = prepared_images or preprocess_uploads(uploads)
+    if not prepared_images:
+        raise HTTPException(status_code=422, detail="Preprocess step produced no usable images.")
+
+    if mode == "grouped":
+        result = classifier.predict_image_bytes_batch(
+            [item.image_bytes for item in prepared_images],
+            k=top_k,
+            aggregation=aggregation,
+        )
+        result["query_filenames"] = [filename for filename, _, _ in uploads]
+        result["prepared_sources"] = [item.source for item in prepared_images]
+        return {
+            "mode": mode,
+            "top_k": top_k,
+            "query_image_count": len(uploads),
+            "aggregation": aggregation,
+            "result": result,
+        }
+
+    results: list[dict[str, Any]] = []
+    for upload, prepared in zip(uploads, prepared_images):
+        filename, _, _ = upload
+        prediction = classifier.predict_image_bytes(
+            prepared.image_bytes,
+            k=top_k,
+            aggregation="embedding_mean",
+        )
+        prediction["query_filename"] = filename
+        prediction["prepared_source"] = prepared.source
+        results.append(prediction)
+
+    return {
+        "mode": mode,
+        "top_k": top_k,
+        "query_image_count": len(uploads),
+        "results": results,
+    }
+
+
 @app.get("/health")
 async def health() -> JSONResponse:
     return JSONResponse(
@@ -185,6 +249,23 @@ async def supported_sneakers() -> JSONResponse:
             "groups": {brand: grouped[brand] for brand in sorted(grouped)},
         }
     )
+
+
+@app.post("/analyze")
+async def analyze_public(
+    files: list[UploadFile] = File(...),
+    mode: Literal["grouped", "per_image"] = Query("grouped"),
+    aggregation: Literal["embedding_mean", "logit_mean", "prob_mean"] = Query("logit_mean"),
+    top_k: int = Query(5, ge=1, le=10),
+) -> JSONResponse:
+    uploads = await _read_uploads(files)
+    payload = _prepare_prediction_payload(
+        uploads,
+        top_k=top_k,
+        mode=mode,
+        aggregation=aggregation,
+    )
+    return JSONResponse(payload)
 
 
 @app.post("/auth/register")
@@ -417,27 +498,16 @@ async def analyze_catalog_item(
         raise HTTPException(status_code=503, detail=f"Predictor unavailable: {classifier_error}")
     _catalog_or_404(catalog_id=catalog_id, user_id=current_user["id"])
 
-    uploads: list[tuple[str, bytes, str]] = []
-    for file in files:
-        payload = await file.read()
-        if not payload:
-            continue
-        mime_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
-        uploads.append((file.filename or "upload", payload, mime_type))
-
-    if not uploads:
-        raise HTTPException(status_code=400, detail="At least one non-empty file is required.")
-
+    uploads = await _read_uploads(files)
     prepared_images = preprocess_uploads(uploads)
-    if not prepared_images:
-        raise HTTPException(status_code=422, detail="Preprocess step produced no usable images.")
-
-    prediction = classifier.predict_image_bytes_batch(
-        [item.image_bytes for item in prepared_images],
-        k=top_k,
+    payload = _prepare_prediction_payload(
+        uploads,
+        top_k=top_k,
+        mode="grouped",
         aggregation=aggregation,
+        prepared_images=prepared_images,
     )
-    prediction["query_filenames"] = [filename for filename, _, _ in uploads]
+    prediction = payload["result"]
 
     item_id = str(uuid.uuid4())
     with get_connection() as connection:

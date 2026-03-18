@@ -17,7 +17,7 @@
 			</p>
 
 			<div class="cta-row">
-				<a class="button primary" href="/signup">Get Started</a>
+				<a class="button primary" href="/analyze">Start Analyzing</a>
 				<a class="button ghost" href="/about">Learn More</a>
 			</div>
 		</section>
