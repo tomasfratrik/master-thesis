@@ -13,6 +13,7 @@ from backend.config import PREVIEWS_DIR
 from .finetuned_classifier_service import FineTunedSneakerClassifier
 
 from .auth import authenticate_user, create_session, create_user, get_current_user
+from .catalog_metadata import build_brand_prefix_map, format_class_label
 from .config import APP_MEDIA_URL_PREFIX, MODEL_CHECKPOINT, PREVIEW_DIR, UPLOADS_DIR
 from .db import get_connection, init_db, utc_now
 from .preprocess_client import preprocess_uploads
@@ -113,6 +114,59 @@ async def health() -> JSONResponse:
             "checkpoint_path": MODEL_CHECKPOINT,
             "previews_dir": str(PREVIEWS_DIR),
             "preprocess_mode": "local",
+        }
+    )
+
+
+@app.get("/supported-sneakers")
+async def supported_sneakers() -> JSONResponse:
+    if classifier is None:
+        raise HTTPException(status_code=503, detail=f"Predictor unavailable: {classifier_error}")
+
+    with get_connection() as connection:
+        metadata_rows = connection.execute(
+            """
+            SELECT class_name, display_name, brand
+            FROM catalog_products
+            ORDER BY brand ASC, display_name ASC
+            """
+        ).fetchall()
+
+    grouped: dict[str, list[dict[str, str]]] = {}
+    items: list[dict[str, str]] = []
+    if metadata_rows:
+        for row in metadata_rows:
+            brand = row["brand"] or "Other"
+            item = {
+                "class_name": row["class_name"],
+                "label": row["display_name"],
+                "brand": brand,
+            }
+            items.append(item)
+            grouped.setdefault(brand, []).append(item)
+    else:
+        brand_map = build_brand_prefix_map(sorted(classifier.class_names))
+        for class_name in sorted(classifier.class_names):
+            brand = brand_map[class_name]
+            item = {
+                "class_name": class_name,
+                "label": format_class_label(class_name),
+                "brand": brand,
+            }
+            items.append(item)
+            grouped.setdefault(brand, []).append(item)
+
+    brands = [
+        {"brand": brand, "count": len(grouped[brand])}
+        for brand in sorted(grouped)
+    ]
+
+    return JSONResponse(
+        {
+            "count": len(items),
+            "items": items,
+            "brands": brands,
+            "groups": {brand: grouped[brand] for brand in sorted(grouped)},
         }
     )
 

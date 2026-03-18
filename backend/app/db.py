@@ -11,6 +11,23 @@ def utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _table_columns(connection: sqlite3.Connection, table_name: str) -> set[str]:
+    rows = connection.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {row[1] for row in rows}
+
+
+def _ensure_column(
+    connection: sqlite3.Connection,
+    *,
+    table_name: str,
+    column_name: str,
+    column_definition: str,
+) -> None:
+    if column_name in _table_columns(connection, table_name):
+        return
+    connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
+
+
 def init_db(db_path: Path = DB_PATH) -> None:
     with sqlite3.connect(db_path) as connection:
         connection.executescript(
@@ -46,6 +63,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 catalog_id TEXT NOT NULL,
                 title TEXT,
                 notes TEXT,
+                matched_product_id TEXT,
                 predicted_class_name TEXT,
                 predicted_label TEXT,
                 predicted_score REAL,
@@ -55,6 +73,46 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 raw_prediction_json TEXT,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (catalog_id) REFERENCES catalogs(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS catalog_products (
+                id TEXT PRIMARY KEY,
+                catalog_id TEXT NOT NULL,
+                class_name TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                brand TEXT,
+                model TEXT,
+                price_eur REAL,
+                last_updated TEXT,
+                colorway TEXT,
+                sku TEXT,
+                retail_price REAL,
+                currency TEXT,
+                release_year INTEGER,
+                release_date TEXT,
+                gender TEXT,
+                category TEXT,
+                source TEXT,
+                source_url TEXT,
+                description TEXT,
+                metadata_json TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (catalog_id) REFERENCES catalogs(id) ON DELETE CASCADE,
+                UNIQUE (catalog_id, class_name)
+            );
+
+            CREATE TABLE IF NOT EXISTS catalog_product_images (
+                id TEXT PRIMARY KEY,
+                product_id TEXT NOT NULL,
+                image_role TEXT,
+                original_filename TEXT,
+                mime_type TEXT,
+                stored_path TEXT,
+                source_url TEXT,
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (product_id) REFERENCES catalog_products(id) ON DELETE CASCADE
             );
 
             CREATE TABLE IF NOT EXISTS item_images (
@@ -67,6 +125,52 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (item_id) REFERENCES catalog_items(id) ON DELETE CASCADE
             );
+
+            """
+        )
+
+        # Additive migration for existing local databases created before the
+        # product metadata schema existed.
+        _ensure_column(
+            connection,
+            table_name="catalog_items",
+            column_name="matched_product_id",
+            column_definition="matched_product_id TEXT",
+        )
+        _ensure_column(
+            connection,
+            table_name="catalog_products",
+            column_name="price_eur",
+            column_definition="price_eur REAL",
+        )
+        _ensure_column(
+            connection,
+            table_name="catalog_products",
+            column_name="last_updated",
+            column_definition="last_updated TEXT",
+        )
+        connection.executescript(
+            """
+            CREATE INDEX IF NOT EXISTS idx_catalog_items_catalog_id
+            ON catalog_items (catalog_id);
+
+            CREATE INDEX IF NOT EXISTS idx_catalog_items_matched_product_id
+            ON catalog_items (matched_product_id);
+
+            CREATE INDEX IF NOT EXISTS idx_catalog_products_catalog_id
+            ON catalog_products (catalog_id);
+
+            CREATE INDEX IF NOT EXISTS idx_catalog_products_brand
+            ON catalog_products (brand);
+
+            CREATE INDEX IF NOT EXISTS idx_catalog_products_class_name
+            ON catalog_products (class_name);
+
+            CREATE INDEX IF NOT EXISTS idx_catalog_product_images_product_id
+            ON catalog_product_images (product_id);
+
+            CREATE INDEX IF NOT EXISTS idx_item_images_item_id
+            ON item_images (item_id);
             """
         )
 
