@@ -121,26 +121,34 @@ def ensure_demo_users() -> None:
                 "SELECT id FROM users WHERE username = ?",
                 (item["username"],),
             ).fetchone()
-            if row is not None:
+            if row is None:
+                salt = secrets.token_hex(16)
+                password_hash = hash_password(item["password"], salt)
+                connection.execute(
+                    """
+                    INSERT INTO users (id, email, username, full_name, role, password_hash, password_salt, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        item["email"],
+                        item["username"],
+                        item["full_name"],
+                        item["role"],
+                        password_hash,
+                        salt,
+                        utc_now(),
+                    ),
+                )
                 continue
 
-            salt = secrets.token_hex(16)
-            password_hash = hash_password(item["password"], salt)
             connection.execute(
                 """
-                INSERT INTO users (id, email, username, full_name, role, password_hash, password_salt, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                UPDATE users
+                SET full_name = ?, email = ?, role = ?
+                WHERE id = ?
                 """,
-                (
-                    str(uuid.uuid4()),
-                    item["email"],
-                    item["username"],
-                    item["full_name"],
-                    item["role"],
-                    password_hash,
-                    salt,
-                    utc_now(),
-                ),
+                (item["full_name"], item["email"], item["role"], row["id"]),
             )
 
 
@@ -175,3 +183,9 @@ def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token.")
 
     return _serialize_user(dict(row))
+
+
+def require_admin(current_user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
+    return current_user

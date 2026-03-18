@@ -27,6 +27,9 @@
 		{#each primaryNav as item}
 			<a class:active={isActive(item.href)} href={item.href}>{item.label}</a>
 		{/each}
+		{#if $auth.user?.role === 'admin'}
+			<a class:active={isActive('/admin')} href="/admin">Admin</a>
+		{/if}
 	</nav>
 
 	<div class="auth-links">

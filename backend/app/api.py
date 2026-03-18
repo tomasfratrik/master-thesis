@@ -12,7 +12,14 @@ from fastapi.staticfiles import StaticFiles
 from backend.config import PREVIEWS_DIR
 from .finetuned_classifier_service import FineTunedSneakerClassifier
 
-from .auth import authenticate_user, create_session, create_user, ensure_demo_users, get_current_user
+from .auth import (
+    authenticate_user,
+    create_session,
+    create_user,
+    ensure_demo_users,
+    get_current_user,
+    require_admin,
+)
 from .catalog_metadata import build_brand_prefix_map, format_class_label
 from .config import APP_MEDIA_URL_PREFIX, MODEL_CHECKPOINT, PREVIEW_DIR, UPLOADS_DIR
 from .db import get_connection, init_db, utc_now
@@ -103,6 +110,14 @@ def _serialize_item(row: dict[str, Any]) -> dict[str, Any]:
         "images": _item_images(row["id"]),
         "prediction": json.loads(row["raw_prediction_json"]) if row["raw_prediction_json"] else None,
     }
+
+
+def _admin_user_counts() -> int:
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT COUNT(*) AS count FROM users WHERE role = 'admin'"
+        ).fetchone()
+    return int(row["count"]) if row is not None else 0
 
 
 @app.get("/health")
@@ -201,6 +216,101 @@ async def login(payload: dict[str, str]) -> JSONResponse:
 @app.get("/me")
 async def me(current_user: dict[str, Any] = Depends(get_current_user)) -> JSONResponse:
     return JSONResponse(current_user)
+
+
+@app.get("/admin/users")
+async def admin_list_users(current_user: dict[str, Any] = Depends(require_admin)) -> JSONResponse:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                users.id,
+                users.username,
+                users.full_name,
+                users.email,
+                users.role,
+                users.created_at,
+                COUNT(DISTINCT catalogs.id) AS catalog_count,
+                COUNT(DISTINCT catalog_items.id) AS item_count
+            FROM users
+            LEFT JOIN catalogs ON catalogs.user_id = users.id
+            LEFT JOIN catalog_items ON catalog_items.catalog_id = catalogs.id
+            GROUP BY users.id
+            ORDER BY
+                CASE users.role WHEN 'admin' THEN 0 ELSE 1 END,
+                users.username ASC
+            """
+        ).fetchall()
+
+    return JSONResponse(
+        {
+            "users": [
+                {
+                    **dict(row),
+                    "is_current_user": row["id"] == current_user["id"],
+                }
+                for row in rows
+            ]
+        }
+    )
+
+
+@app.patch("/admin/users/{user_id}")
+async def admin_update_user(
+    user_id: str,
+    payload: dict[str, str],
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    role = (payload.get("role") or "").strip().lower()
+    if role not in {"user", "admin"}:
+        raise HTTPException(status_code=400, detail="Role must be either 'user' or 'admin'.")
+
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT id, username, full_name, email, role, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        if row["role"] == "admin" and role != "admin" and _admin_user_counts() <= 1:
+            raise HTTPException(status_code=400, detail="At least one admin account must remain.")
+
+        connection.execute(
+            "UPDATE users SET role = ? WHERE id = ?",
+            (role, user_id),
+        )
+
+        updated = connection.execute(
+            "SELECT id, username, full_name, email, role, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+
+    return JSONResponse(dict(updated))
+
+
+@app.delete("/admin/users/{user_id}")
+async def admin_delete_user(
+    user_id: str,
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    if user_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot delete your own admin account.")
+
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT id, role FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="User not found.")
+
+        if row["role"] == "admin" and _admin_user_counts() <= 1:
+            raise HTTPException(status_code=400, detail="At least one admin account must remain.")
+
+        connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+    return JSONResponse({"deleted": True, "id": user_id})
 
 
 @app.get("/catalogs")
