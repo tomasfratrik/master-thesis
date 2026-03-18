@@ -28,6 +28,69 @@ def _ensure_column(
     connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
 
 
+def _unique_username(connection: sqlite3.Connection, preferred: str, user_id: str | None = None) -> str:
+    base = (preferred or "user").strip().lower() or "user"
+    candidate = base
+    counter = 2
+    while True:
+        if user_id is None:
+            row = connection.execute(
+                "SELECT 1 FROM users WHERE username = ?",
+                (candidate,),
+            ).fetchone()
+        else:
+            row = connection.execute(
+                "SELECT 1 FROM users WHERE username = ? AND id != ?",
+                (candidate, user_id),
+            ).fetchone()
+        if row is None:
+            return candidate
+        candidate = f"{base}{counter}"
+        counter += 1
+
+
+def _ensure_user_profile_columns(connection: sqlite3.Connection) -> None:
+    _ensure_column(
+        connection,
+        table_name="users",
+        column_name="username",
+        column_definition="username TEXT",
+    )
+    _ensure_column(
+        connection,
+        table_name="users",
+        column_name="full_name",
+        column_definition="full_name TEXT",
+    )
+    _ensure_column(
+        connection,
+        table_name="users",
+        column_name="role",
+        column_definition="role TEXT NOT NULL DEFAULT 'user'",
+    )
+
+    rows = connection.execute(
+        "SELECT id, email, username, full_name, role FROM users ORDER BY created_at ASC"
+    ).fetchall()
+    for row in rows:
+        user_id, email, username, full_name, role = row
+        next_username = username
+        if not next_username:
+            base = (email or "user").split("@", 1)[0]
+            next_username = _unique_username(connection, base, user_id=user_id)
+
+        next_full_name = full_name or next_username
+        next_role = role or "user"
+        connection.execute(
+            """
+            UPDATE users
+            SET username = ?, full_name = ?, role = ?
+            WHERE id = ?
+            """,
+            (next_username, next_full_name, next_role, user_id),
+        )
+
+
 def init_db(db_path: Path = DB_PATH) -> None:
     with sqlite3.connect(db_path) as connection:
         connection.executescript(
@@ -37,6 +100,9 @@ def init_db(db_path: Path = DB_PATH) -> None:
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL UNIQUE,
+                username TEXT UNIQUE,
+                full_name TEXT,
+                role TEXT NOT NULL DEFAULT 'user',
                 password_hash TEXT NOT NULL,
                 password_salt TEXT NOT NULL,
                 created_at TEXT NOT NULL
@@ -131,6 +197,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
 
         # Additive migration for existing local databases created before the
         # product metadata schema existed.
+        _ensure_user_profile_columns(connection)
         _ensure_column(
             connection,
             table_name="catalog_items",
@@ -165,6 +232,9 @@ def init_db(db_path: Path = DB_PATH) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_catalog_products_class_name
             ON catalog_products (class_name);
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username
+            ON users (username);
 
             CREATE INDEX IF NOT EXISTS idx_catalog_product_images_product_id
             ON catalog_product_images (product_id);

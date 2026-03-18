@@ -45,12 +45,22 @@ def ensure_user(connection: sqlite3.Connection, email: str) -> str:
     salt = secrets.token_hex(16)
     password_hash = hash_password("disabled", salt)
     user_id = str(uuid.uuid4())
+    username = email.split("@", 1)[0]
     connection.execute(
         """
-        INSERT INTO users (id, email, password_hash, password_salt, created_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO users (id, email, username, full_name, role, password_hash, password_salt, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (user_id, email, password_hash, salt, utc_now()),
+        (
+            user_id,
+            email,
+            username,
+            "System User",
+            "admin",
+            password_hash,
+            salt,
+            utc_now(),
+        ),
     )
     return user_id
 

@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.config import PREVIEWS_DIR
 from .finetuned_classifier_service import FineTunedSneakerClassifier
 
-from .auth import authenticate_user, create_session, create_user, get_current_user
+from .auth import authenticate_user, create_session, create_user, ensure_demo_users, get_current_user
 from .catalog_metadata import build_brand_prefix_map, format_class_label
 from .config import APP_MEDIA_URL_PREFIX, MODEL_CHECKPOINT, PREVIEW_DIR, UPLOADS_DIR
 from .db import get_connection, init_db, utc_now
@@ -31,6 +31,7 @@ app.mount(APP_MEDIA_URL_PREFIX, StaticFiles(directory=str(UPLOADS_DIR)), name="a
 app.mount("/previews", StaticFiles(directory=str(PREVIEW_DIR)), name="previews")
 
 init_db()
+ensure_demo_users()
 
 classifier: FineTunedSneakerClassifier | None = None
 classifier_error: str | None = None
@@ -173,31 +174,33 @@ async def supported_sneakers() -> JSONResponse:
 
 @app.post("/auth/register")
 async def register(payload: dict[str, str]) -> JSONResponse:
-    email = (payload.get("email") or "").strip()
+    username = (payload.get("username") or "").strip()
     password = payload.get("password") or ""
-    if not email or not password:
-        raise HTTPException(status_code=400, detail="Email and password are required.")
+    full_name = (payload.get("full_name") or "").strip() or None
+    email = (payload.get("email") or "").strip() or None
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password are required.")
 
-    user = create_user(email=email, password=password)
+    user = create_user(username=username, password=password, full_name=full_name, email=email)
     token = create_session(user["id"])
     return JSONResponse({"user": user, "token": token})
 
 
 @app.post("/auth/login")
 async def login(payload: dict[str, str]) -> JSONResponse:
-    email = (payload.get("email") or "").strip()
+    username = (payload.get("username") or "").strip()
     password = payload.get("password") or ""
-    user = authenticate_user(email=email, password=password)
+    user = authenticate_user(username=username, password=password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials.")
 
     token = create_session(user["id"])
-    return JSONResponse({"user": {"id": user["id"], "email": user["email"]}, "token": token})
+    return JSONResponse({"user": user, "token": token})
 
 
 @app.get("/me")
 async def me(current_user: dict[str, Any] = Depends(get_current_user)) -> JSONResponse:
-    return JSONResponse({"id": current_user["id"], "email": current_user["email"]})
+    return JSONResponse(current_user)
 
 
 @app.get("/catalogs")
