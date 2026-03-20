@@ -7,8 +7,7 @@
 		<p class="eyebrow">About</p>
 		<h1>About the platform</h1>
 		<p>
-			This page is a placeholder route for product and thesis context. Keep the structure, then
-			replace the copy with the actual project story, goals, and system overview.
+            Master thesis project
 		</p>
 	</section>
 </section>
