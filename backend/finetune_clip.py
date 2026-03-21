@@ -31,7 +31,6 @@ from backend.config import (
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 device = DEVICE
-print(f"Using device: {device}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -71,6 +70,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup-epochs", type=int, default=WARMUP_EPOCHS)
     parser.add_argument("--weight-decay", type=float, default=WEIGHT_DECAY)
     parser.add_argument("--num-workers", type=int, default=DATALOADER_NUM_WORKERS)
+    parser.add_argument(
+        "--init-checkpoint",
+        type=Path,
+        default=None,
+        help="Optional fine-tuned checkpoint to continue training from.",
+    )
     return parser.parse_args()
 
 
@@ -217,8 +222,19 @@ def evaluate(model, dataloader: DataLoader, class_tokens: torch.Tensor) -> dict[
 
 def train(args: argparse.Namespace) -> None:
     train_root, val_root, test_root = resolve_dataset_roots(args)
+    print(f"Using device: {device}")
 
     model, preprocess = clip.load(MODEL_NAME, device=device, jit=False)
+    if args.init_checkpoint is not None:
+        # Load resume checkpoints on CPU first to avoid duplicating the whole
+        # model in VRAM during deserialization on smaller GPUs.
+        checkpoint = torch.load(args.init_checkpoint, map_location="cpu")
+        state_dict = checkpoint.get("model_state_dict")
+        if not state_dict:
+            raise ValueError(f"Checkpoint does not contain model_state_dict: {args.init_checkpoint}")
+        model.load_state_dict(state_dict, strict=False)
+        print(f"Loaded init checkpoint from {args.init_checkpoint} via CPU deserialization")
+
     train_dataset = SneakerDataset(train_root, preprocess)
     val_dataset = (
         SneakerDataset(val_root, preprocess, class_names=train_dataset.class_names)
@@ -286,6 +302,7 @@ def train(args: argparse.Namespace) -> None:
     print("\n" + "=" * 70)
     print("TRAINING CONFIGURATION:")
     print(f"  Model: {MODEL_NAME}")
+    print(f"  Init checkpoint: {args.init_checkpoint}")
     print(f"  Train root: {train_root}")
     print(f"  Val root: {val_root}")
     print(f"  Test root: {test_root}")

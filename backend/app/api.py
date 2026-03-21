@@ -3,6 +3,7 @@ import json
 import mimetypes
 import uuid
 from pathlib import Path
+from typing import cast
 from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
@@ -10,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.config import PREVIEWS_DIR
+from backend.config import PREVIEWS_DIR, TEST_SPLIT_ROOT, TRAIN_SPLIT_ROOT, VAL_SPLIT_ROOT
 from .finetuned_classifier_service import FineTunedSneakerClassifier
 
 from .auth import (
@@ -21,10 +22,20 @@ from .auth import (
     get_current_user,
     require_admin,
 )
-from .catalog_metadata import build_brand_prefix_map, format_class_label
+from .catalog_metadata import build_brand_prefix_map, format_class_label, normalize_class_name
 from .config import APP_MEDIA_URL_PREFIX, MODEL_CHECKPOINT, PREVIEW_DIR, UPLOADS_DIR
 from .db import get_connection, init_db, utc_now
-from .preprocess_client import PreparedImage, preprocess_uploads
+from .preprocess_client import PreparedImage, prepare_uploads_without_preprocess, preprocess_uploads
+from .prototype_catalog import load_classifier_prototypes, upsert_prototype_class
+from .training_jobs import (
+    accept_training_job,
+    create_training_job,
+    get_active_checkpoint_path,
+    get_training_job,
+    initialize_training_jobs,
+    list_training_jobs,
+    start_training_job,
+)
 
 
 app = FastAPI(title="Sneaker Catalog App Backend")
@@ -40,16 +51,24 @@ app.mount("/previews", StaticFiles(directory=str(PREVIEW_DIR)), name="previews")
 
 init_db()
 ensure_demo_users()
+initialize_training_jobs()
 
 classifier: FineTunedSneakerClassifier | None = None
 classifier_error: str | None = None
-if MODEL_CHECKPOINT:
+active_checkpoint = get_active_checkpoint_path()
+if active_checkpoint:
     try:
-        classifier = FineTunedSneakerClassifier(checkpoint_path=MODEL_CHECKPOINT)
+        classifier = FineTunedSneakerClassifier(checkpoint_path=active_checkpoint)
     except Exception as error:  # pragma: no cover - startup fallback
         classifier_error = str(error)
 else:
     classifier_error = "SNEAKER_MODEL_CHECKPOINT is not set."
+
+
+def _reload_classifier(checkpoint_path: str) -> None:
+    global classifier, classifier_error
+    classifier = FineTunedSneakerClassifier(checkpoint_path=Path(checkpoint_path))
+    classifier_error = None
 
 
 def _catalog_or_404(catalog_id: str, user_id: str) -> dict[str, Any]:
@@ -216,7 +235,7 @@ async def health() -> JSONResponse:
             "status": "ok",
             "predict_ready": classifier is not None,
             "predict_error": classifier_error,
-            "checkpoint_path": MODEL_CHECKPOINT,
+            "checkpoint_path": get_active_checkpoint_path(),
             "previews_dir": str(PREVIEWS_DIR),
             "preprocess_mode": "local",
         }
@@ -417,6 +436,245 @@ async def admin_delete_user(
         connection.execute("DELETE FROM users WHERE id = ?", (user_id,))
 
     return JSONResponse({"deleted": True, "id": user_id})
+
+
+@app.get("/admin/training-jobs")
+async def admin_list_training_jobs(
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    return JSONResponse(
+        {
+            "active_checkpoint_path": get_active_checkpoint_path(),
+            "jobs": list_training_jobs(),
+        }
+    )
+
+
+@app.get("/admin/training-jobs/{job_id}")
+async def admin_get_training_job(
+    job_id: str,
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    job = get_training_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Training job not found.")
+    return JSONResponse(job)
+
+
+@app.post("/admin/training-jobs")
+async def admin_create_training_job(
+    brand: str = Form(...),
+    display_name: str = Form(...),
+    class_name: str | None = Form(default=None),
+    notes: str | None = Form(default=None),
+    top_k: int = Form(5),
+    required_topk_accuracy: float = Form(0.90),
+    required_new_class_topk_accuracy: float = Form(0.90),
+    train_files: list[UploadFile] | None = File(default=None),
+    test_files: list[UploadFile] | None = File(default=None),
+    preview_files: list[UploadFile] | None = File(default=None),
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    brand = brand.strip()
+    display_name = display_name.strip()
+    if not brand or not display_name:
+        raise HTTPException(status_code=400, detail="Brand and display name are required.")
+
+    resolved_class_name = normalize_class_name(class_name or f"{brand}_{display_name}")
+    train_uploads = await _read_uploads(cast(list[UploadFile], train_files or []))
+    test_uploads = await _read_uploads(cast(list[UploadFile], test_files or []))
+    preview_uploads = await _read_uploads(cast(list[UploadFile], preview_files or []))
+
+    try:
+        job_id = create_training_job(
+            created_by_user_id=current_user["id"],
+            brand=brand,
+            display_name=display_name,
+            class_name=resolved_class_name,
+            notes=notes,
+            train_uploads=train_uploads,
+            test_uploads=test_uploads,
+            preview_uploads=preview_uploads,
+            top_k=top_k,
+            required_topk_accuracy=required_topk_accuracy,
+            required_new_class_topk_accuracy=required_new_class_topk_accuracy,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    job = get_training_job(job_id)
+    return JSONResponse(job, status_code=201)
+
+
+@app.post("/admin/training-jobs/{job_id}/start")
+async def admin_start_training_job(
+    job_id: str,
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    job = get_training_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Training job not found.")
+
+    try:
+        start_training_job(
+            job_id=job_id,
+            train_root=TRAIN_SPLIT_ROOT,
+            val_root=VAL_SPLIT_ROOT if VAL_SPLIT_ROOT.exists() else None,
+            test_root=TEST_SPLIT_ROOT,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    updated = get_training_job(job_id)
+    return JSONResponse(updated or {"started": True, "id": job_id})
+
+
+@app.post("/admin/training-jobs/{job_id}/accept")
+async def admin_accept_training_job(
+    job_id: str,
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    try:
+        job = accept_training_job(job_id)
+        if job.get("activated_checkpoint_path"):
+            _reload_classifier(job["activated_checkpoint_path"])
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Model reload failed: {error}") from error
+
+    return JSONResponse(job)
+
+
+@app.post("/admin/prototype-classes")
+async def admin_create_prototype_class(
+    brand: str = Form(...),
+    display_name: str = Form(...),
+    class_name: str | None = Form(default=None),
+    notes: str | None = Form(default=None),
+    top_k: int = Form(5),
+    skip_preprocess: bool = Form(False),
+    reference_files: list[UploadFile] | None = File(default=None),
+    test_files: list[UploadFile] | None = File(default=None),
+    preview_files: list[UploadFile] | None = File(default=None),
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    del current_user
+    if classifier is None:
+        raise HTTPException(status_code=503, detail=f"Predictor unavailable: {classifier_error}")
+
+    brand = brand.strip()
+    display_name = display_name.strip()
+    if not brand or not display_name:
+        raise HTTPException(status_code=400, detail="Brand and display name are required.")
+
+    resolved_class_name = normalize_class_name(class_name or f"{brand}_{display_name}")
+    existing_metadata = [
+        item["class_name"]
+        for item in load_classifier_prototypes()
+    ]
+    if resolved_class_name in classifier.class_names or resolved_class_name in existing_metadata:
+        raise HTTPException(status_code=409, detail="Class name already exists.")
+
+    reference_uploads = await _read_uploads(cast(list[UploadFile], reference_files or []))
+    test_uploads = await _read_uploads(cast(list[UploadFile], test_files or []))
+    preview_uploads = await _read_uploads(cast(list[UploadFile], preview_files or []))
+
+    if not reference_uploads:
+        raise HTTPException(status_code=400, detail="At least one reference image is required.")
+    if not preview_uploads:
+        preview_uploads = list(reference_uploads)
+
+    reference_preprocessed = (
+        prepare_uploads_without_preprocess(reference_uploads)
+        if skip_preprocess
+        else preprocess_uploads(reference_uploads)
+    )
+    reference_images = reference_preprocessed.images
+    if not reference_images:
+        raise HTTPException(status_code=422, detail="Reference images produced no usable crops.")
+
+    prototype_feature = classifier.build_prototype_from_image_bytes_batch(
+        [item.image_bytes for item in reference_images]
+    )
+    temp_prototype = {
+        "class_name": resolved_class_name,
+        "label": display_name,
+        "feature": prototype_feature,
+        "candidate_type": "prototype",
+    }
+
+    evaluation_items: list[dict[str, Any]] = []
+    top1_correct = 0
+    topk_correct = 0
+    processed_test_images = []
+    evaluation_warnings = list(reference_preprocessed.warnings)
+    if test_uploads:
+        test_preprocessed = (
+            prepare_uploads_without_preprocess(test_uploads)
+            if skip_preprocess
+            else preprocess_uploads(test_uploads)
+        )
+        evaluation_warnings.extend(test_preprocessed.warnings)
+        processed_test_images = [_prepared_image_payload(item) for item in test_preprocessed.images]
+        for item in test_preprocessed.images:
+            prediction = classifier.predict_image_bytes(
+                item.image_bytes,
+                k=top_k,
+                aggregation="embedding_mean",
+                extra_prototypes=[temp_prototype],
+            )
+            top_classes = [candidate["class_name"] for candidate in prediction["top_k"]]
+            is_top1 = prediction["class_name"] == resolved_class_name
+            is_topk = resolved_class_name in top_classes
+            top1_correct += int(is_top1)
+            topk_correct += int(is_topk)
+            evaluation_items.append(
+                {
+                    "input_filename": item.input_filename,
+                    "processed_filename": item.original_filename,
+                    "is_top1": is_top1,
+                    "is_topk": is_topk,
+                    "prediction": prediction,
+                }
+            )
+
+    evaluation_summary = {
+        "test_image_count": len(evaluation_items),
+        "top1_accuracy": (top1_correct / len(evaluation_items)) if evaluation_items else None,
+        f"top{top_k}_accuracy": (topk_correct / len(evaluation_items)) if evaluation_items else None,
+    }
+
+    product_id = upsert_prototype_class(
+        class_name=resolved_class_name,
+        display_name=display_name,
+        brand=brand,
+        notes=notes,
+        prototype_embedding=prototype_feature.detach().cpu().tolist(),
+        reference_uploads=reference_uploads,
+        test_uploads=test_uploads,
+        preview_uploads=preview_uploads,
+        evaluation_summary=evaluation_summary,
+    )
+    return JSONResponse(
+        {
+            "saved": True,
+            "product_id": product_id,
+            "class_name": resolved_class_name,
+            "display_name": display_name,
+            "brand": brand,
+            "activated_in_default_matcher": False,
+            "skip_preprocess": skip_preprocess,
+            "reference_image_count": len(reference_images),
+            "processed_reference_images": [_prepared_image_payload(item) for item in reference_images],
+            "processed_test_images": processed_test_images,
+            "warnings": evaluation_warnings,
+            "evaluation": {
+                "summary": evaluation_summary,
+                "results": evaluation_items,
+            },
+        }
+    )
 
 
 @app.get("/catalogs")

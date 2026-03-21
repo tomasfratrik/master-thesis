@@ -192,6 +192,66 @@ def init_db(db_path: Path = DB_PATH) -> None:
                 FOREIGN KEY (item_id) REFERENCES catalog_items(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS training_jobs (
+                id TEXT PRIMARY KEY,
+                created_by_user_id TEXT NOT NULL,
+                brand TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                class_name TEXT NOT NULL,
+                notes TEXT,
+                status TEXT NOT NULL,
+                top_k INTEGER NOT NULL DEFAULT 5,
+                required_topk_accuracy REAL NOT NULL DEFAULT 0.90,
+                required_new_class_topk_accuracy REAL NOT NULL DEFAULT 0.90,
+                output_dir TEXT,
+                dataset_root TEXT,
+                best_checkpoint_path TEXT,
+                final_checkpoint_path TEXT,
+                evaluation_report_path TEXT,
+                overall_top1_accuracy REAL,
+                overall_topk_accuracy REAL,
+                new_class_top1_accuracy REAL,
+                new_class_topk_accuracy REAL,
+                gate_passed INTEGER NOT NULL DEFAULT 0,
+                accepted INTEGER NOT NULL DEFAULT 0,
+                accepted_at TEXT,
+                activated_checkpoint_path TEXT,
+                error_text TEXT,
+                log_text TEXT,
+                created_at TEXT NOT NULL,
+                started_at TEXT,
+                finished_at TEXT,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS training_job_files (
+                id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                split TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                mime_type TEXT,
+                stored_path TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (job_id) REFERENCES training_jobs(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS catalog_product_prototypes (
+                id TEXT PRIMARY KEY,
+                product_id TEXT NOT NULL UNIQUE,
+                embedding_json TEXT NOT NULL,
+                reference_image_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (product_id) REFERENCES catalog_products(id) ON DELETE CASCADE
+            );
+
             """
         )
 
@@ -241,6 +301,21 @@ def init_db(db_path: Path = DB_PATH) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_item_images_item_id
             ON item_images (item_id);
+
+            CREATE INDEX IF NOT EXISTS idx_training_jobs_status
+            ON training_jobs (status);
+
+            CREATE INDEX IF NOT EXISTS idx_training_jobs_created_by_user_id
+            ON training_jobs (created_by_user_id);
+
+            CREATE INDEX IF NOT EXISTS idx_training_jobs_class_name
+            ON training_jobs (class_name);
+
+            CREATE INDEX IF NOT EXISTS idx_training_job_files_job_id
+            ON training_job_files (job_id);
+
+            CREATE INDEX IF NOT EXISTS idx_catalog_product_prototypes_product_id
+            ON catalog_product_prototypes (product_id);
             """
         )
 

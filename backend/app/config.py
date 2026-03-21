@@ -6,6 +6,8 @@ from backend.config import PREVIEWS_DIR, PROJECT_DIR
 
 APP_DATA_DIR = PROJECT_DIR / "app_data"
 APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+TRAINING_JOBS_DIR = APP_DATA_DIR / "training_jobs"
+TRAINING_JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
 DB_PATH = APP_DATA_DIR / "app.sqlite3"
 UPLOADS_DIR = APP_DATA_DIR / "uploads"

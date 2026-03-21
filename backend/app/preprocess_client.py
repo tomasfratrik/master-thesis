@@ -36,6 +36,32 @@ def _image_to_bytes(image: Any, image_format: str) -> bytes:
     return buffer.getvalue()
 
 
+def prepare_uploads_without_preprocess(
+    uploads: list[tuple[str, bytes, str]],
+) -> PreprocessOutcome:
+    images = [
+        PreparedImage(
+            input_filename=filename,
+            original_filename=filename,
+            image_bytes=payload,
+            mime_type=mime_type,
+            source="original",
+        )
+        for filename, payload, mime_type in uploads
+    ]
+    return PreprocessOutcome(
+        images=images,
+        warnings=[
+            {
+                "code": "preprocess_skipped_by_user",
+                "message": "Preprocess was skipped, so the original uploaded images were analyzed.",
+            }
+        ]
+        if images
+        else [],
+    )
+
+
 def preprocess_uploads(
     uploads: list[tuple[str, bytes, str]],
 ) -> PreprocessOutcome:

@@ -58,6 +58,7 @@ class FineTunedSneakerClassifier:
             text_features = self.model.encode_text(self.text_tokens)
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
             self.text_features = text_features.float()
+        self.extra_prototypes: list[dict[str, Any]] = []
 
     @torch.no_grad()
     def _encode_images(self, images: list[Image.Image]) -> torch.Tensor:
@@ -92,26 +93,102 @@ class FineTunedSneakerClassifier:
     def _compute_logits(self, image_features: torch.Tensor) -> torch.Tensor:
         return 100.0 * image_features @ self.text_features.T
 
+    def set_extra_prototypes(self, items: list[dict[str, Any]]) -> None:
+        normalized: list[dict[str, Any]] = []
+        for item in items:
+            feature = item["feature"]
+            if not torch.is_tensor(feature):
+                feature = torch.tensor(feature, dtype=torch.float32)
+            feature = feature.to(self.device).float()
+            if feature.ndim > 1:
+                feature = feature.squeeze(0)
+            feature = feature / feature.norm(dim=-1, keepdim=True)
+            normalized.append(
+                {
+                    "class_name": item["class_name"],
+                    "label": item.get("label") or _format_class_name(item["class_name"]),
+                    "feature": feature,
+                    "preview_urls": item.get("preview_urls") or _preview_urls(item["class_name"]),
+                    "candidate_type": item.get("candidate_type", "prototype"),
+                }
+            )
+        self.extra_prototypes = normalized
+
+    def build_prototype_from_images(self, images: list[Image.Image]) -> torch.Tensor:
+        image_features = self._encode_images(images)
+        aggregated = self._aggregate_features(image_features)
+        return aggregated[0].detach().float()
+
+    def build_prototype_from_image_bytes_batch(self, image_payloads: list[bytes]) -> torch.Tensor:
+        images = [Image.open(io.BytesIO(payload)) for payload in image_payloads]
+        return self.build_prototype_from_images(images)
+
+    def _candidate_space(
+        self,
+        extra_prototypes: list[dict[str, Any]] | None = None,
+    ) -> tuple[torch.Tensor, list[dict[str, Any]]]:
+        metadata = [
+            {
+                "class_name": class_name,
+                "label": _format_class_name(class_name),
+                "prompt": prompt,
+                "preview_urls": _preview_urls(class_name),
+                "candidate_type": "checkpoint",
+            }
+            for class_name, prompt in zip(self.class_names, self.class_prompts)
+        ]
+        features = [self.text_features]
+
+        combined_extras = list(self.extra_prototypes)
+        if extra_prototypes:
+            shadowed = {item["class_name"] for item in extra_prototypes}
+            combined_extras = [
+                item for item in combined_extras if item["class_name"] not in shadowed
+            ] + extra_prototypes
+
+        if combined_extras:
+            prototype_matrix = torch.stack(
+                [item["feature"] for item in combined_extras],
+                dim=0,
+            ).to(self.device)
+            features.append(prototype_matrix)
+            metadata.extend(
+                [
+                    {
+                        "class_name": item["class_name"],
+                        "label": item.get("label") or _format_class_name(item["class_name"]),
+                        "prompt": None,
+                        "preview_urls": item.get("preview_urls") or _preview_urls(item["class_name"]),
+                        "candidate_type": item.get("candidate_type", "prototype"),
+                    }
+                    for item in combined_extras
+                ]
+            )
+
+        return torch.cat(features, dim=0), metadata
+
     def _build_prediction_result(
         self,
         probabilities: torch.Tensor,
+        candidate_metadata: list[dict[str, Any]],
         k: int,
         query_image_count: int,
         aggregation: AggregationMode,
     ) -> dict[str, Any]:
-        k = max(1, min(int(k), len(self.class_names)))
+        k = max(1, min(int(k), len(candidate_metadata)))
         top_scores, top_indices = probabilities.topk(k)
 
         top_k: list[dict[str, Any]] = []
         for score, index in zip(top_scores.tolist(), top_indices.tolist()):
-            class_name = self.class_names[index]
+            candidate = candidate_metadata[index]
             top_k.append(
                 {
-                    "class_name": class_name,
-                    "label": _format_class_name(class_name),
-                    "prompt": self.class_prompts[index],
+                    "class_name": candidate["class_name"],
+                    "label": candidate["label"],
+                    "prompt": candidate["prompt"],
                     "score": float(score),
-                    "preview_urls": _preview_urls(class_name),
+                    "preview_urls": candidate["preview_urls"],
+                    "candidate_type": candidate["candidate_type"],
                 }
             )
 
@@ -133,20 +210,23 @@ class FineTunedSneakerClassifier:
         images: list[Image.Image],
         k: int = 5,
         aggregation: AggregationMode = "embedding_mean",
+        extra_prototypes: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         aggregation = self._validate_aggregation(aggregation)
         image_features = self._encode_images(images)
+        candidate_features, candidate_metadata = self._candidate_space(extra_prototypes)
         if aggregation == "embedding_mean":
             aggregated_features = self._aggregate_features(image_features)
-            probabilities = self._compute_logits(aggregated_features).softmax(dim=-1)[0]
+            probabilities = (100.0 * aggregated_features @ candidate_features.T).softmax(dim=-1)[0]
         else:
-            logits = self._compute_logits(image_features)
+            logits = 100.0 * image_features @ candidate_features.T
             if aggregation == "logit_mean":
                 probabilities = logits.mean(dim=0).softmax(dim=-1)
             else:
                 probabilities = logits.softmax(dim=-1).mean(dim=0)
         return self._build_prediction_result(
             probabilities=probabilities,
+            candidate_metadata=candidate_metadata,
             k=k,
             query_image_count=len(images),
             aggregation=aggregation,
@@ -157,41 +237,71 @@ class FineTunedSneakerClassifier:
         image: Image.Image,
         k: int = 5,
         aggregation: AggregationMode = "embedding_mean",
+        extra_prototypes: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        return self.predict_images(images=[image], k=k, aggregation=aggregation)
+        return self.predict_images(
+            images=[image],
+            k=k,
+            aggregation=aggregation,
+            extra_prototypes=extra_prototypes,
+        )
 
     def predict_image_bytes(
         self,
         image_bytes: bytes,
         k: int = 5,
         aggregation: AggregationMode = "embedding_mean",
+        extra_prototypes: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         image = Image.open(io.BytesIO(image_bytes))
-        return self.predict_image(image=image, k=k, aggregation=aggregation)
+        return self.predict_image(
+            image=image,
+            k=k,
+            aggregation=aggregation,
+            extra_prototypes=extra_prototypes,
+        )
 
     def predict_image_bytes_batch(
         self,
         image_payloads: list[bytes],
         k: int = 5,
         aggregation: AggregationMode = "embedding_mean",
+        extra_prototypes: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         images = [Image.open(io.BytesIO(payload)) for payload in image_payloads]
-        return self.predict_images(images=images, k=k, aggregation=aggregation)
+        return self.predict_images(
+            images=images,
+            k=k,
+            aggregation=aggregation,
+            extra_prototypes=extra_prototypes,
+        )
 
     def predict_image_path(
         self,
         image_path: str | Path,
         k: int = 5,
         aggregation: AggregationMode = "embedding_mean",
+        extra_prototypes: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         image = Image.open(image_path)
-        return self.predict_image(image=image, k=k, aggregation=aggregation)
+        return self.predict_image(
+            image=image,
+            k=k,
+            aggregation=aggregation,
+            extra_prototypes=extra_prototypes,
+        )
 
     def predict_image_paths(
         self,
         image_paths: list[str | Path],
         k: int = 5,
         aggregation: AggregationMode = "embedding_mean",
+        extra_prototypes: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         images = [Image.open(image_path) for image_path in image_paths]
-        return self.predict_images(images=images, k=k, aggregation=aggregation)
+        return self.predict_images(
+            images=images,
+            k=k,
+            aggregation=aggregation,
+            extra_prototypes=extra_prototypes,
+        )

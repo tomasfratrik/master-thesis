@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 
 
 def format_class_label(class_name: str) -> str:
@@ -55,3 +56,11 @@ def infer_model_name(class_name: str, brand: str) -> str:
     if display_name.startswith(f"{brand} "):
         return display_name[len(brand) + 1 :]
     return display_name
+
+
+def normalize_class_name(value: str) -> str:
+    normalized = re.sub(r"[^A-Za-z0-9]+", "_", value.strip())
+    normalized = re.sub(r"_+", "_", normalized).strip("_")
+    if not normalized:
+        raise ValueError("Class name is required.")
+    return normalized

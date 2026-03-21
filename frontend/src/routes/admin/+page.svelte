@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import AdminTrainingPanel from '$lib/components/AdminTrainingPanel.svelte';
 	import { apiBaseUrl } from '$lib/config/env';
 	import { auth } from '$lib/stores/auth';
 
@@ -205,6 +206,10 @@
 			</div>
 		{/if}
 	</section>
+
+	{#if currentToken && !loading && !error}
+		<AdminTrainingPanel token={currentToken} />
+	{/if}
 </section>
 
 <style>
