@@ -369,6 +369,47 @@ def _resolve_catalog_class_name(
     return alias_map.get(_normalize_lookup_key(class_name), class_name)
 
 
+def _metadata_class_name(meta: dict[str, Any], *, context: str) -> str:
+    raw_class_name = meta.get("class_name")
+    if not raw_class_name:
+        raw_class_name = meta.get("class")
+
+    if not raw_class_name:
+        raise ValueError(f"{context} metadata is missing class_name/class.")
+
+    return str(raw_class_name)
+
+
+def _metadata_label(meta: dict[str, Any], product: dict[str, Any], class_name: str) -> str:
+    if product.get("label"):
+        return str(product["label"])
+
+    if meta.get("label"):
+        return str(meta["label"])
+
+    return format_class_label(class_name)
+
+
+def _metadata_reference_count(meta: dict[str, Any], *, fallback: int) -> int:
+    if meta.get("image_count") is not None:
+        return int(meta["image_count"])
+
+    if meta.get("count") is not None:
+        return int(meta["count"])
+
+    return fallback
+
+
+def _metadata_source_path(meta: dict[str, Any]) -> str | None:
+    if meta.get("path"):
+        return str(meta["path"])
+
+    if meta.get("sample_image"):
+        return str(meta["sample_image"])
+
+    return None
+
+
 def _load_precomputed_embedding_entries() -> list[dict[str, Any]]:
     if PRECOMPUTED_CLASS_EMBEDDINGS is None or PRECOMPUTED_CLASS_METADATA is None:
         return []
@@ -385,20 +426,18 @@ def _load_precomputed_embedding_entries() -> list[dict[str, Any]]:
     alias_map = _catalog_class_alias_map(product_map)
     items: list[dict[str, Any]] = []
     for feature, meta in zip(embeddings, metadata):
-        raw_class_name = meta.get("class_name") or meta.get("class")
-        if not raw_class_name:
-            raise ValueError("Class embedding metadata is missing class_name/class.")
-        class_name = _resolve_catalog_class_name(str(raw_class_name), product_map, alias_map)
+        raw_class_name = _metadata_class_name(meta, context="Class embedding")
+        class_name = _resolve_catalog_class_name(raw_class_name, product_map, alias_map)
         product = product_map.get(class_name, {})
         items.append(
             {
                 "product_id": product.get("product_id"),
                 "class_name": class_name,
-                "label": product.get("label") or meta.get("label") or format_class_label(class_name),
+                "label": _metadata_label(meta, product, class_name),
                 "brand": product.get("brand"),
                 "model": product.get("model"),
                 "feature": feature.tolist(),
-                "reference_image_count": meta.get("image_count", meta.get("count", 0)),
+                "reference_image_count": _metadata_reference_count(meta, fallback=0),
                 "preview_urls": _preview_urls(class_name),
                 "candidate_type": "catalog_embedding",
             }
@@ -422,23 +461,21 @@ def _load_precomputed_image_entries() -> list[dict[str, Any]]:
     alias_map = _catalog_class_alias_map(product_map)
     items: list[dict[str, Any]] = []
     for feature, meta in zip(embeddings, metadata):
-        raw_class_name = meta.get("class_name") or meta.get("class")
-        if not raw_class_name:
-            raise ValueError("Image embedding metadata is missing class_name/class.")
-        class_name = _resolve_catalog_class_name(str(raw_class_name), product_map, alias_map)
+        raw_class_name = _metadata_class_name(meta, context="Image embedding")
+        class_name = _resolve_catalog_class_name(raw_class_name, product_map, alias_map)
         product = product_map.get(class_name, {})
         items.append(
             {
                 "product_id": product.get("product_id"),
                 "class_name": class_name,
-                "label": product.get("label") or meta.get("label") or format_class_label(class_name),
+                "label": _metadata_label(meta, product, class_name),
                 "brand": product.get("brand"),
                 "model": product.get("model"),
                 "feature": feature.tolist(),
-                "reference_image_count": meta.get("image_count", 1),
+                "reference_image_count": _metadata_reference_count(meta, fallback=1),
                 "preview_urls": _preview_urls(class_name),
                 "candidate_type": "catalog_embedding",
-                "source_path": meta.get("path") or meta.get("sample_image"),
+                "source_path": _metadata_source_path(meta),
                 "embedding_source": "precomputed_image",
             }
         )

@@ -84,6 +84,38 @@ def predict_scores(
     return top_predictions, margin
 
 
+def get_class_stats(
+    per_class: dict[str, dict[str, int]],
+    class_name: str,
+) -> dict[str, int]:
+    if class_name not in per_class:
+        per_class[class_name] = {"total": 0, "top1_correct": 0, "topk_correct": 0}
+
+    return per_class[class_name]
+
+
+def second_best_score(top_predictions: list[dict[str, object]]) -> float:
+    if len(top_predictions) < 2:
+        return 0.0
+
+    return float(top_predictions[1]["score"])
+
+
+def build_per_class_summary(per_class: dict[str, dict[str, int]]) -> dict[str, dict[str, float | int]]:
+    summary: dict[str, dict[str, float | int]] = {}
+
+    for class_name, stats in sorted(per_class.items()):
+        summary[class_name] = {
+            "total": stats["total"],
+            "top1_correct": stats["top1_correct"],
+            "topk_correct": stats["topk_correct"],
+            "top1_accuracy": stats["top1_correct"] / stats["total"],
+            "topk_accuracy": stats["topk_correct"] / stats["total"],
+        }
+
+    return summary
+
+
 def main() -> None:
     args = parse_args()
     checkpoint_path = Path(args.checkpoint) if args.checkpoint else None
@@ -135,7 +167,7 @@ def main() -> None:
         is_top1 = predicted_class == expected_class
         is_topk = expected_class in topk_classes
 
-        stats = per_class.setdefault(expected_class, {"total": 0, "top1_correct": 0, "topk_correct": 0})
+        stats = get_class_stats(per_class, expected_class)
         stats["total"] += 1
 
         if is_top1:
@@ -150,7 +182,7 @@ def main() -> None:
                     "expected_class": expected_class,
                     "predicted_class": predicted_class,
                     "top1_score": float(top_predictions[0]["score"]),
-                    "second_best_score": float(top_predictions[1]["score"]) if len(top_predictions) > 1 else 0.0,
+                    "second_best_score": second_best_score(top_predictions),
                     "margin_vs_second": margin,
                     "top_k": top_predictions,
                 }
@@ -163,14 +195,15 @@ def main() -> None:
         top1_scores.append(float(top_predictions[0]["score"]))
         top1_margins.append(margin)
 
-    per_class_summary = {
-        class_name: {
-            **stats,
-            "top1_accuracy": stats["top1_correct"] / stats["total"],
-            "topk_accuracy": stats["topk_correct"] / stats["total"],
-        }
-        for class_name, stats in sorted(per_class.items())
-    }
+    per_class_summary = build_per_class_summary(per_class)
+
+    mean_margin_when_correct = 0.0
+    if correct_margins:
+        mean_margin_when_correct = mean(correct_margins)
+
+    mean_margin_when_wrong = 0.0
+    if incorrect_margins:
+        mean_margin_when_wrong = mean(incorrect_margins)
 
     summary = {
         **query_encoder.model_summary(),
@@ -186,8 +219,8 @@ def main() -> None:
         f"top{args.top_k}_accuracy": topk_correct / total,
         "mean_top1_score": mean(top1_scores),
         "mean_margin_vs_second": mean(top1_margins),
-        "mean_margin_when_correct": mean(correct_margins) if correct_margins else 0.0,
-        "mean_margin_when_wrong": mean(incorrect_margins) if incorrect_margins else 0.0,
+        "mean_margin_when_correct": mean_margin_when_correct,
+        "mean_margin_when_wrong": mean_margin_when_wrong,
         "errors": len(failures),
     }
 

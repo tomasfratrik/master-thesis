@@ -193,8 +193,21 @@ async def _read_uploads(files: list[UploadFile]) -> list[tuple[str, bytes, str]]
         payload = await file.read()
         if not payload:
             continue
-        mime_type = file.content_type or mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
-        uploads.append((file.filename or "upload", payload, mime_type))
+
+        filename = "upload"
+        if file.filename:
+            filename = file.filename
+
+        mime_type = file.content_type
+        if not mime_type:
+            guessed_type, _encoding = mimetypes.guess_type(filename)
+            if guessed_type:
+                mime_type = guessed_type
+
+        if not mime_type:
+            mime_type = "application/octet-stream"
+
+        uploads.append((filename, payload, mime_type))
     return uploads
 
 

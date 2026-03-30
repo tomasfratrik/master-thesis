@@ -46,6 +46,10 @@ class EvaluationImageEncoder:
     ) -> None:
         self.device = device
         self.checkpoint_path = Path(checkpoint_path) if checkpoint_path is not None else None
+        use_checkpoint = None
+        if self.checkpoint_path is None:
+            use_checkpoint = False
+
         self.encoder: VisionLanguageEncoder = load_encoder(
             backend=backend,
             model_name=model_name,
@@ -54,7 +58,7 @@ class EvaluationImageEncoder:
             checkpoint_path=self.checkpoint_path,
             checkpoint_map_location=self.device,
             checkpoint_strict=False,
-            use_checkpoint=False if self.checkpoint_path is None else None,
+            use_checkpoint=use_checkpoint,
         )
         self.preprocess = self.encoder.preprocess
         self.backend = self.encoder.backend
@@ -105,11 +109,15 @@ class EvaluationImageEncoder:
         return aggregated[0].detach().float()
 
     def model_summary(self) -> dict[str, str | None]:
+        checkpoint = None
+        if self.checkpoint_path is not None:
+            checkpoint = str(self.checkpoint_path)
+
         return {
             "backend": self.backend,
             "model_name": self.model_name,
             "pretrained": self.pretrained,
-            "checkpoint": str(self.checkpoint_path) if self.checkpoint_path is not None else None,
+            "checkpoint": checkpoint,
         }
 
 
@@ -169,6 +177,8 @@ class ZeroShotSneakerClassifier(EvaluationImageEncoder):
                 }
             )
 
-        second_best_score = float(top_predictions[1]["score"]) if len(top_predictions) > 1 else 0.0
+        second_best_score = 0.0
+        if len(top_predictions) > 1:
+            second_best_score = float(top_predictions[1]["score"])
         margin = float(top_predictions[0]["score"]) - second_best_score
         return top_predictions, margin

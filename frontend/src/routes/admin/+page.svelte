@@ -11,6 +11,33 @@
 	let currentToken = null;
 	let currentUserId = null;
 
+	function adminPageError(data, fallback) {
+		if (data && data.detail) {
+			return data.detail;
+		}
+
+		return fallback;
+	}
+
+	function updateUserRoleInList(userId, role) {
+		const updatedUsers = [];
+
+		for (const user of users) {
+			if (user.id === userId) {
+				updatedUsers.push({
+					...user,
+					role,
+					is_current_user: user.is_current_user
+				});
+				continue;
+			}
+
+			updatedUsers.push(user);
+		}
+
+		users = updatedUsers;
+	}
+
 	async function loadUsers(token) {
 		loading = true;
 		error = '';
@@ -22,11 +49,19 @@
 			});
 			const data = await response.json();
 			if (!response.ok) {
-				throw new Error(data?.detail || 'Failed to load users.');
+				throw new Error(adminPageError(data, 'Failed to load users.'));
 			}
-			users = data.users || [];
+			if (data.users) {
+				users = data.users;
+			} else {
+				users = [];
+			}
 		} catch (err) {
-			error = err.message || 'Failed to load users.';
+			if (err && err.message) {
+				error = err.message;
+			} else {
+				error = 'Failed to load users.';
+			}
 		} finally {
 			loading = false;
 		}
@@ -47,13 +82,15 @@
 			});
 			const data = await response.json();
 			if (!response.ok) {
-				throw new Error(data?.detail || 'Failed to update role.');
+				throw new Error(adminPageError(data, 'Failed to update role.'));
 			}
-			users = users.map((user) =>
-				user.id === userId ? { ...user, role: data.role, is_current_user: user.is_current_user } : user
-			);
+			updateUserRoleInList(userId, data.role);
 		} catch (err) {
-			error = err.message || 'Failed to update role.';
+			if (err && err.message) {
+				error = err.message;
+			} else {
+				error = 'Failed to update role.';
+			}
 		} finally {
 			activeAction = '';
 		}
@@ -73,11 +110,15 @@
 			});
 			const data = await response.json();
 			if (!response.ok) {
-				throw new Error(data?.detail || 'Failed to delete user.');
+				throw new Error(adminPageError(data, 'Failed to delete user.'));
 			}
 			users = users.filter((user) => user.id !== data.id);
 		} catch (err) {
-			error = err.message || 'Failed to delete user.';
+			if (err && err.message) {
+				error = err.message;
+			} else {
+				error = 'Failed to delete user.';
+			}
 		} finally {
 			activeAction = '';
 		}
@@ -90,7 +131,11 @@
 	onMount(() => {
 		const unsubscribe = auth.subscribe((state) => {
 			currentToken = state.token;
-			currentUserId = state.user?.id || null;
+			if (state.user && state.user.id) {
+				currentUserId = state.user.id;
+			} else {
+				currentUserId = null;
+			}
 
 			if (!state.user) {
 				loading = false;

@@ -18,7 +18,11 @@
 	let skipPreprocess = false;
 
 	function fileNames(files) {
-		return Array.from(files || []).map((file) => file.name);
+		if (!files) {
+			return [];
+		}
+
+		return Array.from(files).map((file) => file.name);
 	}
 
 	function prettyPercent(score) {
@@ -27,7 +31,83 @@
 	}
 
 	function sourceLabel(source) {
-		return source === 'preprocessed' ? 'Preprocessed' : 'Original image';
+		if (source === 'preprocessed') {
+			return 'Preprocessed';
+		}
+
+		return 'Original image';
+	}
+
+	function readFiles(fileList) {
+		if (!fileList) {
+			return [];
+		}
+
+		return Array.from(fileList);
+	}
+
+	function handleReferenceFilesChange(event) {
+		referenceFiles = readFiles(event.currentTarget.files);
+	}
+
+	function handleTestFilesChange(event) {
+		testFiles = readFiles(event.currentTarget.files);
+	}
+
+	function handlePreviewFilesChange(event) {
+		previewFiles = readFiles(event.currentTarget.files);
+	}
+
+	function saveButtonLabel() {
+		if (submitting) {
+			return 'Saving class...';
+		}
+
+		return 'Create prototype class';
+	}
+
+	function preprocessLabel() {
+		if (result?.skip_preprocess) {
+			return 'Skipped';
+		}
+
+		return 'Enabled';
+	}
+
+	function retrievalLabel() {
+		if (result?.activated_in_retrieval) {
+			return 'Active';
+		}
+
+		return 'Inactive';
+	}
+
+	function referenceImageHeading() {
+		if (result?.skip_preprocess) {
+			return 'Reference images used';
+		}
+
+		return 'Processed reference images';
+	}
+
+	function evaluationStatusLabel(item) {
+		if (item.is_top1) {
+			return 'Top-1 hit';
+		}
+
+		if (item.is_topk) {
+			return `Top-${topK} hit`;
+		}
+
+		return 'Miss';
+	}
+
+	function responseErrorMessage(data) {
+		if (data && data.detail) {
+			return data.detail;
+		}
+
+		return 'Failed to add prototype class.';
 	}
 
 	function clearForm() {
@@ -55,7 +135,11 @@
 			formData.set('class_name', className.trim());
 			formData.set('notes', notes.trim());
 			formData.set('top_k', String(topK));
-			formData.set('skip_preprocess', skipPreprocess ? 'true' : 'false');
+			if (skipPreprocess) {
+				formData.set('skip_preprocess', 'true');
+			} else {
+				formData.set('skip_preprocess', 'false');
+			}
 			for (const file of referenceFiles) formData.append('reference_files', file);
 			for (const file of testFiles) formData.append('test_files', file);
 			for (const file of previewFiles) formData.append('preview_files', file);
@@ -69,12 +153,16 @@
 			});
 			const data = await response.json();
 			if (!response.ok) {
-				throw new Error(data?.detail || 'Failed to add prototype class.');
+				throw new Error(responseErrorMessage(data));
 			}
 			result = data;
 			clearForm();
 		} catch (err) {
-			error = err.message || 'Failed to add prototype class.';
+			if (err && err.message) {
+				error = err.message;
+			} else {
+				error = 'Failed to add prototype class.';
+			}
 		} finally {
 			submitting = false;
 		}
@@ -133,7 +221,7 @@
 					type="file"
 					accept="image/*"
 					multiple
-					onchange={(event) => (referenceFiles = Array.from(event.currentTarget.files || []))}
+					onchange={handleReferenceFilesChange}
 				/>
 				<small>{referenceFiles.length} selected</small>
 				{#if referenceFiles.length}
@@ -146,7 +234,7 @@
 					type="file"
 					accept="image/*"
 					multiple
-					onchange={(event) => (testFiles = Array.from(event.currentTarget.files || []))}
+					onchange={handleTestFilesChange}
 				/>
 				<small>{testFiles.length} selected</small>
 				{#if testFiles.length}
@@ -159,7 +247,7 @@
 					type="file"
 					accept="image/*"
 					multiple
-					onchange={(event) => (previewFiles = Array.from(event.currentTarget.files || []))}
+					onchange={handlePreviewFilesChange}
 				/>
 				<small>{previewFiles.length} selected</small>
 				{#if previewFiles.length}
@@ -175,7 +263,7 @@
 				disabled={submitting || !brand.trim() || !displayName.trim() || referenceFiles.length === 0}
 				onclick={savePrototypeClass}
 			>
-				{submitting ? 'Saving class...' : 'Create prototype class'}
+				{saveButtonLabel()}
 			</button>
 		</div>
 
@@ -200,8 +288,8 @@
 				<div><span>Test images</span><strong>{result.evaluation.summary.test_image_count ?? 0}</strong></div>
 				<div><span>Top-1 accuracy</span><strong>{prettyPercent(result.evaluation.summary.top1_accuracy)}</strong></div>
 				<div><span>Top-{topK} accuracy</span><strong>{prettyPercent(result.evaluation.summary[`top${topK}_accuracy`])}</strong></div>
-				<div><span>Preprocess</span><strong>{result.skip_preprocess ? 'Skipped' : 'Enabled'}</strong></div>
-				<div><span>Retrieval</span><strong>{result.activated_in_retrieval ? 'Active' : 'Inactive'}</strong></div>
+				<div><span>Preprocess</span><strong>{preprocessLabel()}</strong></div>
+				<div><span>Retrieval</span><strong>{retrievalLabel()}</strong></div>
 			</div>
 
 			{#if result.warnings?.length}
@@ -214,7 +302,7 @@
 
 			{#if result.processed_reference_images?.length}
 				<div class="image-block">
-					<p class="eyebrow">{result.skip_preprocess ? 'Reference images used' : 'Processed reference images'}</p>
+					<p class="eyebrow">{referenceImageHeading()}</p>
 					<div class="image-grid">
 						{#each result.processed_reference_images as image}
 							<figure class="image-card">
@@ -235,7 +323,7 @@
 									<p class="result-rank">Test #{index + 1}</p>
 									<h4>{item.input_filename}</h4>
 								</div>
-								<strong>{item.is_top1 ? 'Top-1 hit' : item.is_topk ? `Top-${topK} hit` : 'Miss'}</strong>
+								<strong>{evaluationStatusLabel(item)}</strong>
 							</div>
 							<p class="route-note">
 								Predicted: {item.prediction.label} ({prettyPercent(item.prediction.score)})

@@ -10,10 +10,34 @@
 	let activeBrand = 'All';
 	let searchQuery = '';
 
+	function sneakersForActiveBrand() {
+		if (activeBrand === 'All') {
+			return items;
+		}
+
+		if (groups[activeBrand]) {
+			return groups[activeBrand];
+		}
+
+		return [];
+	}
+
+	function supportedSneakersError(data) {
+		if (data && data.detail) {
+			return data.detail;
+		}
+
+		return 'Failed to load supported sneakers.';
+	}
+
 	function visibleItems() {
-		const pool = activeBrand === 'All' ? items : groups[activeBrand] || [];
+		const pool = sneakersForActiveBrand();
 		const query = searchQuery.trim().toLowerCase();
-		if (!query) return pool;
+
+		if (!query) {
+			return pool;
+		}
+
 		return pool.filter(
 			(item) =>
 				item.label.toLowerCase().includes(query) || item.brand.toLowerCase().includes(query)
@@ -26,14 +50,32 @@
 			const data = await response.json();
 
 			if (!response.ok) {
-				throw new Error(data?.detail || 'Failed to load supported sneakers.');
+				throw new Error(supportedSneakersError(data));
 			}
 
-			items = data.items || [];
-			brands = data.brands || [];
-			groups = data.groups || {};
+			if (data.items) {
+				items = data.items;
+			} else {
+				items = [];
+			}
+
+			if (data.brands) {
+				brands = data.brands;
+			} else {
+				brands = [];
+			}
+
+			if (data.groups) {
+				groups = data.groups;
+			} else {
+				groups = {};
+			}
 		} catch (err) {
-			error = err.message || 'Failed to load supported sneakers.';
+			if (err && err.message) {
+				error = err.message;
+			} else {
+				error = 'Failed to load supported sneakers.';
+			}
 		} finally {
 			loading = false;
 		}
