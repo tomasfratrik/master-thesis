@@ -1,26 +1,28 @@
 import argparse
 import json
+from collections import defaultdict
 from pathlib import Path
 from statistics import mean
 
+import numpy as np
 from tqdm import tqdm
 
-from backend.config import TEST_SPLIT_ROOT
-from backend.eval_model import (
-    ZeroShotSneakerClassifier,
-    list_labeled_images,
-    load_checkpoint_class_names,
+from backend.config import (
+    PRECOMPUTED_IMAGE_EMBEDDINGS,
+    PRECOMPUTED_IMAGE_METADATA,
+    TEST_SPLIT_ROOT,
 )
+from backend.eval_model import EvaluationImageEncoder, format_class_label, list_labeled_images
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate CLIP classification on a labeled test split."
+        description="Evaluate image-level embedding retrieval on a labeled test split."
     )
     parser.add_argument(
         "--checkpoint",
         default=None,
-        help="Optional path to fine-tuned checkpoint. Omit for base-model zero-shot evaluation.",
+        help="Optional path to fine-tuned checkpoint. Omit for base-model retrieval evaluation.",
     )
     parser.add_argument(
         "--backend",
@@ -39,17 +41,30 @@ def parse_args() -> argparse.Namespace:
         help="Optional pretrained tag for open_clip. Falls back to config/env defaults.",
     )
     parser.add_argument(
-        "--prompt-template",
-        default="a photo of {label} sneakers",
-        help="Prompt template used for zero-shot class prompts.",
-    )
-    parser.add_argument(
         "--test-root",
         type=Path,
         default=TEST_SPLIT_ROOT,
         help="Root directory with one folder per class.",
     )
     parser.add_argument("--top-k", type=int, default=5, help="Top-k accuracy to report.")
+    parser.add_argument(
+        "--top-images-per-class",
+        type=int,
+        default=3,
+        help="Number of best matching train-image similarities to average per class.",
+    )
+    parser.add_argument(
+        "--image-embeddings",
+        type=Path,
+        default=PRECOMPUTED_IMAGE_EMBEDDINGS,
+        help="Path to precomputed image_embeddings.npy",
+    )
+    parser.add_argument(
+        "--image-metadata",
+        type=Path,
+        default=PRECOMPUTED_IMAGE_METADATA,
+        help="Path to precomputed image_meta.json",
+    )
     parser.add_argument(
         "--limit",
         type=int,
@@ -65,12 +80,67 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def load_catalog(image_embeddings_path: Path, image_metadata_path: Path) -> tuple[np.ndarray, list[dict[str, object]]]:
+    if image_embeddings_path is None or not image_embeddings_path.exists():
+        raise FileNotFoundError(f"Image embeddings not found: {image_embeddings_path}")
+    if image_metadata_path is None or not image_metadata_path.exists():
+        raise FileNotFoundError(f"Image metadata not found: {image_metadata_path}")
+
+    embeddings = np.load(image_embeddings_path).astype("float32")
+    metadata = json.loads(image_metadata_path.read_text())
+    if len(embeddings) != len(metadata):
+        raise ValueError(
+            f"Embedding/image metadata length mismatch: {len(embeddings)} vs {len(metadata)}"
+        )
+    return embeddings, metadata
+
+
+def _metadata_class(meta: dict[str, object]) -> str:
+    return str(meta.get("class_name") or meta.get("class"))
+
+
+def _metadata_model_info(meta: dict[str, object]) -> dict[str, object]:
+    return {
+        "embedding_backend": meta.get("embedding_backend"),
+        "embedding_model_name": meta.get("embedding_model_name"),
+        "embedding_pretrained": meta.get("embedding_pretrained"),
+        "embedding_checkpoint": meta.get("embedding_checkpoint"),
+    }
+
+
 def predict_scores(
-    classifier: ZeroShotSneakerClassifier,
+    encoder: EvaluationImageEncoder,
     image_path: Path,
+    image_embeddings: np.ndarray,
+    image_metadata: list[dict[str, object]],
+    *,
     top_k: int,
-) -> tuple[list[dict[str, float | str]], float]:
-    return classifier.predict_image_path(image_path, top_k=top_k)
+    top_images_per_class: int,
+) -> tuple[list[dict[str, object]], float]:
+    query_feature = encoder.build_prototype_from_image_paths([image_path]).cpu().numpy().astype("float32")
+
+    image_scores = image_embeddings @ query_feature
+    per_class_scores: dict[str, list[float]] = defaultdict(list)
+    for score, meta in zip(image_scores.tolist(), image_metadata):
+        per_class_scores[_metadata_class(meta)].append(float(score))
+
+    ranked_classes: list[dict[str, object]] = []
+    for class_name, scores in per_class_scores.items():
+        top_scores = sorted(scores, reverse=True)[: max(1, top_images_per_class)]
+        aggregated_score = float(sum(top_scores) / len(top_scores))
+        ranked_classes.append(
+            {
+                "class_name": class_name,
+                "label": format_class_label(class_name),
+                "score": aggregated_score,
+            }
+        )
+
+    ranked_classes.sort(key=lambda item: float(item["score"]), reverse=True)
+    top_predictions = ranked_classes[: max(1, min(int(top_k), len(ranked_classes)))]
+    second_best_score = float(top_predictions[1]["score"]) if len(top_predictions) > 1 else 0.0
+    margin = float(top_predictions[0]["score"]) - second_best_score
+    return top_predictions, margin
 
 
 def main() -> None:
@@ -89,14 +159,11 @@ def main() -> None:
     if args.limit is not None:
         dataset = dataset[: args.limit]
 
-    class_names = (
-        load_checkpoint_class_names(checkpoint_path)
-        if checkpoint_path is not None
-        else sorted({class_name for _, class_name in dataset})
+    image_embeddings, image_metadata = load_catalog(
+        image_embeddings_path=Path(args.image_embeddings),
+        image_metadata_path=Path(args.image_metadata),
     )
-    classifier = ZeroShotSneakerClassifier(
-        class_names=class_names,
-        prompt_template=args.prompt_template,
+    encoder = EvaluationImageEncoder(
         checkpoint_path=checkpoint_path,
         backend=args.backend,
         model_name=args.model_name,
@@ -113,11 +180,14 @@ def main() -> None:
     per_class: dict[str, dict[str, int]] = {}
     failures: list[dict[str, object]] = []
 
-    for image_path, expected_class in tqdm(dataset, desc="Evaluating"):
+    for image_path, expected_class in tqdm(dataset, desc="Evaluating image retrieval"):
         top_predictions, margin = predict_scores(
-            classifier=classifier,
+            encoder=encoder,
             image_path=image_path,
+            image_embeddings=image_embeddings,
+            image_metadata=image_metadata,
             top_k=args.top_k,
+            top_images_per_class=args.top_images_per_class,
         )
         predicted_class = str(top_predictions[0]["class_name"])
         topk_classes = [str(item["class_name"]) for item in top_predictions]
@@ -162,11 +232,12 @@ def main() -> None:
     }
 
     summary = {
-        **classifier.model_summary(),
+        **encoder.model_summary(),
         "test_root": str(test_root),
-        "class_count": len(class_names),
-        "class_source": "checkpoint" if checkpoint_path is not None else "test_root",
-        "prompt_template": args.prompt_template,
+        "catalog_images": int(image_embeddings.shape[0]),
+        "catalog_classes": len({_metadata_class(item) for item in image_metadata}),
+        "catalog_embedding_model": _metadata_model_info(image_metadata[0]) if image_metadata else {},
+        "top_images_per_class": args.top_images_per_class,
         "images_evaluated": total,
         "classes_evaluated": len(per_class_summary),
         "top1_accuracy": top1_correct / total,

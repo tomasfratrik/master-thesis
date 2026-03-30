@@ -97,11 +97,11 @@
 		<div class="field-grid">
 			<label>
 				<span>Brand</span>
-				<input bind:value={brand} placeholder="New Balance" />
+				<input bind:value={brand} placeholder="New Balance / Nike / ..." />
 			</label>
 			<label>
-				<span>Display name</span>
-				<input bind:value={displayName} placeholder="9060" />
+				<span>Full display name</span>
+				<input bind:value={displayName} placeholder="New Balance 9060" />
 			</label>
 			<label>
 				<span>Save as class name</span>
@@ -201,6 +201,7 @@
 				<div><span>Top-1 accuracy</span><strong>{prettyPercent(result.evaluation.summary.top1_accuracy)}</strong></div>
 				<div><span>Top-{topK} accuracy</span><strong>{prettyPercent(result.evaluation.summary[`top${topK}_accuracy`])}</strong></div>
 				<div><span>Preprocess</span><strong>{result.skip_preprocess ? 'Skipped' : 'Enabled'}</strong></div>
+				<div><span>Retrieval</span><strong>{result.activated_in_retrieval ? 'Active' : 'Inactive'}</strong></div>
 			</div>
 
 			{#if result.warnings?.length}

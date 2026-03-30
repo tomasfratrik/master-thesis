@@ -3,24 +3,22 @@ import json
 from pathlib import Path
 from statistics import mean
 
+from PIL import Image
 from tqdm import tqdm
 
+from backend.app.embedding_retrieval import CatalogEmbeddingRetrieval
 from backend.config import TEST_SPLIT_ROOT
-from backend.eval_model import (
-    ZeroShotSneakerClassifier,
-    list_labeled_images,
-    load_checkpoint_class_names,
-)
+from backend.eval_model import EvaluationImageEncoder, list_labeled_images
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate CLIP classification on a labeled test split."
+        description="Evaluate embedding-based sneaker retrieval on a labeled test split."
     )
     parser.add_argument(
         "--checkpoint",
         default=None,
-        help="Optional path to fine-tuned checkpoint. Omit for base-model zero-shot evaluation.",
+        help="Optional path to fine-tuned checkpoint. Omit for base-model retrieval evaluation.",
     )
     parser.add_argument(
         "--backend",
@@ -39,17 +37,24 @@ def parse_args() -> argparse.Namespace:
         help="Optional pretrained tag for open_clip. Falls back to config/env defaults.",
     )
     parser.add_argument(
-        "--prompt-template",
-        default="a photo of {label} sneakers",
-        help="Prompt template used for zero-shot class prompts.",
-    )
-    parser.add_argument(
         "--test-root",
         type=Path,
         default=TEST_SPLIT_ROOT,
         help="Root directory with one folder per class.",
     )
     parser.add_argument("--top-k", type=int, default=5, help="Top-k accuracy to report.")
+    parser.add_argument(
+        "--class-aggregation",
+        choices=["max", "topn_mean"],
+        default="max",
+        help="How to aggregate multiple image matches into one class score.",
+    )
+    parser.add_argument(
+        "--top-n-per-class",
+        type=int,
+        default=3,
+        help="When using topn_mean, average this many best image matches per class.",
+    )
     parser.add_argument(
         "--limit",
         type=int,
@@ -66,11 +71,17 @@ def parse_args() -> argparse.Namespace:
 
 
 def predict_scores(
-    classifier: ZeroShotSneakerClassifier,
+    retrieval: CatalogEmbeddingRetrieval,
     image_path: Path,
     top_k: int,
-) -> tuple[list[dict[str, float | str]], float]:
-    return classifier.predict_image_path(image_path, top_k=top_k)
+) -> tuple[list[dict[str, object]], float]:
+    with Image.open(image_path) as image:
+        prediction = retrieval.search_images([image.convert("RGB")], k=top_k)
+
+    top_predictions = prediction["top_k"]
+    second_best_score = float(top_predictions[1]["score"]) if len(top_predictions) > 1 else 0.0
+    margin = float(top_predictions[0]["score"]) - second_best_score
+    return top_predictions, margin
 
 
 def main() -> None:
@@ -89,19 +100,19 @@ def main() -> None:
     if args.limit is not None:
         dataset = dataset[: args.limit]
 
-    class_names = (
-        load_checkpoint_class_names(checkpoint_path)
-        if checkpoint_path is not None
-        else sorted({class_name for _, class_name in dataset})
-    )
-    classifier = ZeroShotSneakerClassifier(
-        class_names=class_names,
-        prompt_template=args.prompt_template,
+    query_encoder = EvaluationImageEncoder(
         checkpoint_path=checkpoint_path,
         backend=args.backend,
         model_name=args.model_name,
         pretrained=args.pretrained,
     )
+    retrieval = CatalogEmbeddingRetrieval(
+        query_encoder,
+        class_aggregation=args.class_aggregation,
+        top_n_per_class=args.top_n_per_class,
+    )
+    if not retrieval.entries:
+        raise RuntimeError("No retrieval catalog entries are available.")
 
     total = len(dataset)
     top1_correct = 0
@@ -113,9 +124,9 @@ def main() -> None:
     per_class: dict[str, dict[str, int]] = {}
     failures: list[dict[str, object]] = []
 
-    for image_path, expected_class in tqdm(dataset, desc="Evaluating"):
+    for image_path, expected_class in tqdm(dataset, desc="Evaluating retrieval"):
         top_predictions, margin = predict_scores(
-            classifier=classifier,
+            retrieval=retrieval,
             image_path=image_path,
             top_k=args.top_k,
         )
@@ -162,11 +173,13 @@ def main() -> None:
     }
 
     summary = {
-        **classifier.model_summary(),
+        **query_encoder.model_summary(),
         "test_root": str(test_root),
-        "class_count": len(class_names),
-        "class_source": "checkpoint" if checkpoint_path is not None else "test_root",
-        "prompt_template": args.prompt_template,
+        "catalog_entries": retrieval.catalog_size,
+        "catalog_rows": retrieval.row_count,
+        "catalog_mode": retrieval.entry_mode,
+        "class_aggregation": args.class_aggregation,
+        "top_n_per_class": args.top_n_per_class,
         "images_evaluated": total,
         "classes_evaluated": len(per_class_summary),
         "top1_accuracy": top1_correct / total,

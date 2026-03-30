@@ -9,7 +9,7 @@ import torch
 from PIL import Image
 
 from backend.config import CLS_META_JSON, DEVICE, FAISS_INDEX, MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
-from backend.model_loader import load_model
+from backend.model_loader import load_encoder
 
 
 class SneakerLabelService:
@@ -20,7 +20,9 @@ class SneakerLabelService:
         use_checkpoint: bool | None = None,
     ) -> None:
         self.use_checkpoint = MODEL_USE_CHECKPOINT if use_checkpoint is None else use_checkpoint
-        self.model, self.preprocess = load_model(use_checkpoint=use_checkpoint)
+        self.encoder = load_encoder(use_checkpoint=use_checkpoint)
+        self.model = self.encoder.model
+        self.preprocess = self.encoder.preprocess
         self.index = faiss.read_index(str(index_path))
         with open(meta_path, "r", encoding="utf-8") as f:
             self.meta = json.load(f)
@@ -80,7 +82,7 @@ class SneakerLabelService:
     @torch.no_grad()
     def _encode_image(self, image: Image.Image) -> np.ndarray:
         x = self.preprocess(image.convert("RGB")).unsqueeze(0).to(DEVICE)
-        z = self.model.encode_image(x)
+        z = self.encoder.encode_image_tensors(x)
         z = z / z.norm(dim=-1, keepdim=True)
         return z.cpu().numpy().astype("float32")
 

@@ -2,7 +2,6 @@ import argparse
 import json
 from pathlib import Path
 
-import clip
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -27,6 +26,7 @@ from backend.config import (
     WARMUP_EPOCHS,
     WEIGHT_DECAY,
 )
+from backend.model_loader import load_encoder
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -224,15 +224,17 @@ def train(args: argparse.Namespace) -> None:
     train_root, val_root, test_root = resolve_dataset_roots(args)
     print(f"Using device: {device}")
 
-    model, preprocess = clip.load(MODEL_NAME, device=device, jit=False)
+    encoder = load_encoder(device=device, use_checkpoint=False)
+    model = encoder.model
+    preprocess = encoder.preprocess
     if args.init_checkpoint is not None:
         # Load resume checkpoints on CPU first to avoid duplicating the whole
         # model in VRAM during deserialization on smaller GPUs.
-        checkpoint = torch.load(args.init_checkpoint, map_location="cpu")
-        state_dict = checkpoint.get("model_state_dict")
-        if not state_dict:
-            raise ValueError(f"Checkpoint does not contain model_state_dict: {args.init_checkpoint}")
-        model.load_state_dict(state_dict, strict=False)
+        encoder.load_checkpoint_weights(
+            args.init_checkpoint,
+            map_location="cpu",
+            strict=False,
+        )
         print(f"Loaded init checkpoint from {args.init_checkpoint} via CPU deserialization")
 
     train_dataset = SneakerDataset(train_root, preprocess)
@@ -274,12 +276,12 @@ def train(args: argparse.Namespace) -> None:
         else None
     )
 
-    class_tokens = clip.tokenize(train_dataset.class_prompts).to(device)
+    class_tokens = encoder.tokenize_texts(train_dataset.class_prompts)
 
     if device.type == "cpu":
         model.float()
     else:
-        clip.model.convert_weights(model)
+        encoder.prepare_optimizer_step()
 
     optimizer = optim.Adam(
         model.parameters(),
@@ -328,7 +330,7 @@ def train(args: argparse.Namespace) -> None:
             images = images.to(device)
             labels = labels.to(device)
 
-            logits_per_image, _ = model(images, class_tokens)
+            logits_per_image, _ = encoder.forward_logits(images, class_tokens)
             loss = loss_fn(logits_per_image, labels)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -338,7 +340,7 @@ def train(args: argparse.Namespace) -> None:
             else:
                 convert_models_to_fp32(model)
                 optimizer.step()
-                clip.model.convert_weights(model)
+                encoder.prepare_optimizer_step()
 
             batch_size = len(images)
             epoch_loss += loss.item() * batch_size

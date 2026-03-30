@@ -3,11 +3,11 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
-import clip
 import torch
 from PIL import Image
 
 from backend.config import DEVICE, MODEL_NAME, PREVIEWS_DIR, PREVIEW_LIMIT, PREVIEW_URL_PREFIX
+from backend.model_loader import load_encoder
 
 
 def _format_class_name(class_name: str) -> str:
@@ -39,10 +39,15 @@ class FineTunedSneakerClassifier:
         if not self.checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
 
-        self.model, self.preprocess = clip.load(MODEL_NAME, device=self.device, jit=False)
+        self.encoder = load_encoder(
+            device=self.device,
+            checkpoint_path=self.checkpoint_path,
+            checkpoint_map_location=self.device,
+            checkpoint_strict=False,
+        )
+        self.model = self.encoder.model
+        self.preprocess = self.encoder.preprocess
         checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
-        self.model.eval()
 
         class_names = checkpoint.get("class_names")
         if not class_names:
@@ -54,8 +59,8 @@ class FineTunedSneakerClassifier:
             for class_name in self.class_names
         ]
         with torch.no_grad():
-            self.text_tokens = clip.tokenize(self.class_prompts).to(self.device)
-            text_features = self.model.encode_text(self.text_tokens)
+            self.text_tokens = self.encoder.tokenize_texts(self.class_prompts)
+            text_features = self.encoder.encode_text_tokens(self.text_tokens)
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
             self.text_features = text_features.float()
         self.extra_prototypes: list[dict[str, Any]] = []
@@ -70,7 +75,7 @@ class FineTunedSneakerClassifier:
             for image in images
         ]
         batch = torch.stack(image_tensors, dim=0).to(self.device)
-        image_features = self.model.encode_image(batch)
+        image_features = self.encoder.encode_image_tensors(batch)
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
         return image_features.float()
 
@@ -79,6 +84,10 @@ class FineTunedSneakerClassifier:
         # Represent one sneaker item by averaging all view embeddings, then renormalizing.
         aggregated = image_features.mean(dim=0, keepdim=True)
         return aggregated / aggregated.norm(dim=-1, keepdim=True)
+
+    @staticmethod
+    def _chunked[T](items: list[T], size: int) -> list[list[T]]:
+        return [items[index : index + size] for index in range(0, len(items), size)]
 
     @staticmethod
     def _validate_aggregation(aggregation: str) -> AggregationMode:
@@ -115,13 +124,34 @@ class FineTunedSneakerClassifier:
         self.extra_prototypes = normalized
 
     def build_prototype_from_images(self, images: list[Image.Image]) -> torch.Tensor:
-        image_features = self._encode_images(images)
+        if not images:
+            raise ValueError("At least one image is required to build a prototype.")
+
+        feature_chunks: list[torch.Tensor] = []
+        for chunk in self._chunked(images, 16):
+            feature_chunks.append(self._encode_images(chunk))
+        image_features = torch.cat(feature_chunks, dim=0)
         aggregated = self._aggregate_features(image_features)
         return aggregated[0].detach().float()
 
     def build_prototype_from_image_bytes_batch(self, image_payloads: list[bytes]) -> torch.Tensor:
         images = [Image.open(io.BytesIO(payload)) for payload in image_payloads]
         return self.build_prototype_from_images(images)
+
+    def build_prototype_from_image_paths(self, image_paths: list[str | Path]) -> torch.Tensor:
+        if not image_paths:
+            raise ValueError("At least one image path is required to build a prototype.")
+
+        feature_chunks: list[torch.Tensor] = []
+        for chunk in self._chunked([Path(path) for path in image_paths], 16):
+            images: list[Image.Image] = []
+            for image_path in chunk:
+                with Image.open(image_path) as image:
+                    images.append(image.convert("RGB"))
+            feature_chunks.append(self._encode_images(images))
+        image_features = torch.cat(feature_chunks, dim=0)
+        aggregated = self._aggregate_features(image_features)
+        return aggregated[0].detach().float()
 
     def _candidate_space(
         self,

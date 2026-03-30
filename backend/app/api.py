@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import PREVIEWS_DIR, TEST_SPLIT_ROOT, TRAIN_SPLIT_ROOT, VAL_SPLIT_ROOT
+from .embedding_retrieval import CatalogEmbeddingRetrieval
 from .finetuned_classifier_service import FineTunedSneakerClassifier
 
 from .auth import (
@@ -26,7 +27,7 @@ from .catalog_metadata import build_brand_prefix_map, format_class_label, normal
 from .config import APP_MEDIA_URL_PREFIX, MODEL_CHECKPOINT, PREVIEW_DIR, UPLOADS_DIR
 from .db import get_connection, init_db, utc_now
 from .preprocess_client import PreparedImage, prepare_uploads_without_preprocess, preprocess_uploads
-from .prototype_catalog import load_classifier_prototypes, upsert_prototype_class
+from .prototype_catalog import ensure_catalog_embeddings, load_classifier_prototypes, upsert_prototype_class
 from .training_jobs import (
     accept_training_job,
     create_training_job,
@@ -55,10 +56,19 @@ initialize_training_jobs()
 
 classifier: FineTunedSneakerClassifier | None = None
 classifier_error: str | None = None
+retrieval_index: CatalogEmbeddingRetrieval | None = None
 active_checkpoint = get_active_checkpoint_path()
 if active_checkpoint:
     try:
         classifier = FineTunedSneakerClassifier(checkpoint_path=active_checkpoint)
+        print("[startup] Preparing retrieval catalog embeddings...", flush=True)
+        ensure_catalog_embeddings(classifier)
+        retrieval_index = CatalogEmbeddingRetrieval(classifier)
+        print(
+            f"[startup] Retrieval index ready with {retrieval_index.catalog_size} classes "
+            f"across {retrieval_index.row_count} embedding rows.",
+            flush=True,
+        )
     except Exception as error:  # pragma: no cover - startup fallback
         classifier_error = str(error)
 else:
@@ -66,9 +76,35 @@ else:
 
 
 def _reload_classifier(checkpoint_path: str) -> None:
-    global classifier, classifier_error
+    global classifier, classifier_error, retrieval_index
     classifier = FineTunedSneakerClassifier(checkpoint_path=Path(checkpoint_path))
+    print("[startup] Refreshing retrieval catalog embeddings after classifier reload...", flush=True)
+    ensure_catalog_embeddings(classifier)
+    retrieval_index = CatalogEmbeddingRetrieval(classifier)
+    print(
+        f"[startup] Retrieval index ready with {retrieval_index.catalog_size} classes "
+        f"across {retrieval_index.row_count} embedding rows.",
+        flush=True,
+    )
     classifier_error = None
+
+
+def _refresh_retrieval_index() -> None:
+    global retrieval_index
+    if classifier is None:
+        retrieval_index = None
+        return
+    print("[retrieval] Refreshing retrieval index...", flush=True)
+    ensure_catalog_embeddings(classifier)
+    if retrieval_index is None:
+        retrieval_index = CatalogEmbeddingRetrieval(classifier)
+    else:
+        retrieval_index.refresh()
+    print(
+        f"[retrieval] Retrieval index refreshed with {retrieval_index.catalog_size} classes "
+        f"across {retrieval_index.row_count} embedding rows.",
+        flush=True,
+    )
 
 
 def _catalog_or_404(catalog_id: str, user_id: str) -> dict[str, Any]:
@@ -228,6 +264,71 @@ def _prepare_prediction_payload(
     }
 
 
+def _prepare_retrieval_payload(
+    uploads: list[tuple[str, bytes, str]],
+    *,
+    top_k: int,
+    mode: Literal["grouped", "per_image"],
+    prepared_images: list[PreparedImage] | None = None,
+    warnings: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    if classifier is None or retrieval_index is None:
+        raise HTTPException(status_code=503, detail=f"Retrieval index unavailable: {classifier_error}")
+    if not uploads:
+        raise HTTPException(status_code=400, detail="At least one non-empty file is required.")
+
+    if prepared_images is None:
+        preprocess_outcome = preprocess_uploads(uploads)
+        prepared_images = preprocess_outcome.images
+        warnings = preprocess_outcome.warnings
+    else:
+        warnings = warnings or []
+
+    if not prepared_images:
+        raise HTTPException(status_code=422, detail="Preprocess step produced no usable images.")
+
+    if mode == "grouped":
+        result = retrieval_index.search_image_bytes_batch(
+            [item.image_bytes for item in prepared_images],
+            k=top_k,
+        )
+        result["query_filenames"] = [filename for filename, _, _ in uploads]
+        result["prepared_sources"] = [item.source for item in prepared_images]
+        return {
+            "analysis_method": "retrieval",
+            "mode": mode,
+            "top_k": top_k,
+            "query_image_count": len(uploads),
+            "processed_image_count": len(prepared_images),
+            "aggregation": "embedding_mean",
+            "warnings": warnings,
+            "processed_images": [_prepared_image_payload(item) for item in prepared_images],
+            "result": result,
+        }
+
+    results: list[dict[str, Any]] = []
+    for prepared in prepared_images:
+        prediction = retrieval_index.search_image_bytes(
+            prepared.image_bytes,
+            k=top_k,
+        )
+        prediction["query_filename"] = prepared.input_filename
+        prediction["processed_filename"] = prepared.original_filename
+        prediction["prepared_source"] = prepared.source
+        prediction["processed_image"] = _prepared_image_payload(prepared)
+        results.append(prediction)
+
+    return {
+        "analysis_method": "retrieval",
+        "mode": mode,
+        "top_k": top_k,
+        "query_image_count": len(uploads),
+        "processed_image_count": len(prepared_images),
+        "warnings": warnings,
+        "results": results,
+    }
+
+
 @app.get("/health")
 async def health() -> JSONResponse:
     return JSONResponse(
@@ -238,6 +339,8 @@ async def health() -> JSONResponse:
             "checkpoint_path": get_active_checkpoint_path(),
             "previews_dir": str(PREVIEWS_DIR),
             "preprocess_mode": "local",
+            "retrieval_ready": retrieval_index is not None,
+            "retrieval_catalog_size": retrieval_index.catalog_size if retrieval_index is not None else 0,
         }
     )
 
@@ -308,6 +411,22 @@ async def analyze_public(
         top_k=top_k,
         mode=mode,
         aggregation=aggregation,
+    )
+    payload["analysis_method"] = "classifier"
+    return JSONResponse(payload)
+
+
+@app.post("/analyze-retrieval")
+async def analyze_retrieval(
+    files: list[UploadFile] = File(...),
+    mode: Literal["grouped", "per_image"] = Query("grouped"),
+    top_k: int = Query(5, ge=1, le=10),
+) -> JSONResponse:
+    uploads = await _read_uploads(files)
+    payload = _prepare_retrieval_payload(
+        uploads,
+        top_k=top_k,
+        mode=mode,
     )
     return JSONResponse(payload)
 
@@ -560,7 +679,7 @@ async def admin_create_prototype_class(
     current_user: dict[str, Any] = Depends(require_admin),
 ) -> JSONResponse:
     del current_user
-    if classifier is None:
+    if classifier is None or retrieval_index is None:
         raise HTTPException(status_code=503, detail=f"Predictor unavailable: {classifier_error}")
 
     brand = brand.strip()
@@ -601,7 +720,9 @@ async def admin_create_prototype_class(
         "class_name": resolved_class_name,
         "label": display_name,
         "feature": prototype_feature,
-        "candidate_type": "prototype",
+        "candidate_type": "catalog_embedding",
+        "brand": brand,
+        "model": display_name,
     }
 
     evaluation_items: list[dict[str, Any]] = []
@@ -618,11 +739,10 @@ async def admin_create_prototype_class(
         evaluation_warnings.extend(test_preprocessed.warnings)
         processed_test_images = [_prepared_image_payload(item) for item in test_preprocessed.images]
         for item in test_preprocessed.images:
-            prediction = classifier.predict_image_bytes(
+            prediction = retrieval_index.search_image_bytes(
                 item.image_bytes,
                 k=top_k,
-                aggregation="embedding_mean",
-                extra_prototypes=[temp_prototype],
+                extra_entries=[temp_prototype],
             )
             top_classes = [candidate["class_name"] for candidate in prediction["top_k"]]
             is_top1 = prediction["class_name"] == resolved_class_name
@@ -656,6 +776,7 @@ async def admin_create_prototype_class(
         preview_uploads=preview_uploads,
         evaluation_summary=evaluation_summary,
     )
+    _refresh_retrieval_index()
     return JSONResponse(
         {
             "saved": True,
@@ -663,6 +784,7 @@ async def admin_create_prototype_class(
             "class_name": resolved_class_name,
             "display_name": display_name,
             "brand": brand,
+            "activated_in_retrieval": True,
             "activated_in_default_matcher": False,
             "skip_preprocess": skip_preprocess,
             "reference_image_count": len(reference_images),

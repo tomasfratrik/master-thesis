@@ -67,8 +67,10 @@ PREVIEW_URL_PREFIX = "/previews"
 PREVIEW_LIMIT = _int_env("SNEAKER_PREVIEW_LIMIT", 10)
 
 # Model
-MODEL_BACKEND = "clip"
-MODEL_NAME = "ViT-B/32"
+MODEL_BACKEND = os.getenv("SNEAKER_MODEL_BACKEND", "clip")
+MODEL_NAME = os.getenv("SNEAKER_MODEL_NAME", "ViT-B/32")
+MODEL_PRETRAINED = os.getenv("SNEAKER_MODEL_PRETRAINED")
+# Example larger defaults to try manually:
 # MODEL_NAME = "ViT-L/14"
 MODEL_USE_CHECKPOINT = False
 MODEL_CHECKPOINT = os.getenv("SNEAKER_MODEL_CHECKPOINT")
@@ -94,3 +96,32 @@ IMG_META_JSON = ARTIFACTS / "image_meta.json"
 CLS_EMB_NPY = ARTIFACTS / "class_embeddings.npy"
 CLS_META_JSON = ARTIFACTS / "class_meta.json"
 FAISS_INDEX = ARTIFACTS / "class_index.faiss"
+
+
+def _embedding_file(*candidates: Path) -> Path | None:
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+PRECOMPUTED_CLASS_EMBEDDINGS = _embedding_file(
+    ARTIFACTS / "class_embeddings.npy",
+    PROJECT_DIR / "class_embeddings.npy",
+)
+PRECOMPUTED_CLASS_METADATA = _embedding_file(
+    ARTIFACTS / "class_meta.json",
+    ARTIFACTS / "class_metadata.json",
+    PROJECT_DIR / "class_meta.json",
+    PROJECT_DIR / "class_metadata.json",
+)
+PRECOMPUTED_IMAGE_EMBEDDINGS = _embedding_file(
+    ARTIFACTS / "image_embeddings.npy",
+    PROJECT_DIR / "catalog-image-embeddings" / "image_embeddings.npy",
+    PROJECT_DIR / "image_embeddings.npy",
+)
+PRECOMPUTED_IMAGE_METADATA = _embedding_file(
+    ARTIFACTS / "image_meta.json",
+    PROJECT_DIR / "catalog-image-embeddings" / "image_meta.json",
+    PROJECT_DIR / "image_meta.json",
+)

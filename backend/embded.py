@@ -16,8 +16,9 @@ from backend.config import (
     DEVICE,
     IMG_EMB_NPY,
     IMG_META_JSON,
+    MODEL_CHECKPOINT,
 )
-from backend.model_loader import load_model
+from backend.model_loader import load_encoder
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -54,19 +55,26 @@ def list_images(cls_dir: Path) -> List[Path]:
     ])
 
 @torch.no_grad()
-def encode_batch(model, preprocess, paths: List[Path]):
+def encode_batch(encoder, preprocess, paths: List[Path]):
     imgs = []
     for p in paths:
         img = Image.open(p).convert("RGB")
         imgs.append(preprocess(img))
     x = torch.stack(imgs, dim=0).to(DEVICE)
-    z = model.encode_image(x)
+    z = encoder.encode_image_tensors(x)
     z = z / z.norm(dim=-1, keepdim=True)
     return z.cpu().numpy().astype("float32")  # [B, D]
 
 def main():
     args = parse_args()
-    model, preprocess = load_model(use_checkpoint=True if args.use_checkpoint else None)
+    encoder = load_encoder(use_checkpoint=True if args.use_checkpoint else None)
+    preprocess = encoder.preprocess
+    embedding_info = {
+        "embedding_backend": encoder.backend,
+        "embedding_model_name": encoder.model_name,
+        "embedding_pretrained": getattr(encoder, "pretrained", None),
+        "embedding_checkpoint": str(MODEL_CHECKPOINT) if args.use_checkpoint and MODEL_CHECKPOINT else None,
+    }
 
     classes = discover_class_dirs(args.dataset_root)
     image_meta: List[Dict] = []
@@ -97,13 +105,14 @@ def main():
         B = 64
         for i in tqdm(range(0, len(imgs), B), desc=f"Embedding {cls_dir.name}"):
             batch_paths = imgs[i:i+B]
-            feats = encode_batch(model, preprocess, batch_paths)  # [b, D]
+            feats = encode_batch(encoder, preprocess, batch_paths)  # [b, D]
             image_vecs.append(feats)
             image_meta.extend([
                 {
                     "class": class_name,
                     "path": str(p.as_posix()),
-                    "filename": p.name
+                    "filename": p.name,
+                    **embedding_info,
                 } for p in batch_paths
             ])
 
@@ -134,7 +143,8 @@ def main():
         cls_meta.append({
             "class": cname,
             "rep_path": class_to_rep_path[cname],
-            "count": len(idxs)
+            "count": len(idxs),
+            **embedding_info,
         })
 
     cls_vecs = np.vstack(cls_vecs).astype("float32")

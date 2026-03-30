@@ -5,10 +5,20 @@ import shutil
 import uuid
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
-from backend.config import PREVIEWS_DIR
+import numpy as np
+from PIL import Image
+from backend.config import (
+    PRECOMPUTED_CLASS_EMBEDDINGS,
+    PRECOMPUTED_CLASS_METADATA,
+    PRECOMPUTED_IMAGE_EMBEDDINGS,
+    PRECOMPUTED_IMAGE_METADATA,
+    PREVIEWS_DIR,
+)
+from backend.config import PREVIEW_URL_PREFIX, TRAIN_SPLIT_ROOT
 
-from .catalog_metadata import infer_model_name
+from .catalog_metadata import format_class_label, infer_model_name
 from .config import UPLOADS_DIR
 from .db import get_connection, utc_now
 from .training_jobs import ensure_reference_catalog
@@ -34,6 +44,44 @@ def save_preview_assets(class_name: str, preview_uploads: list[tuple[str, bytes,
         suffix = Path(filename).suffix.lower() or ".jpg"
         target = preview_dir / f"{class_name}_preview_{index:02d}{suffix}"
         target.write_bytes(payload)
+
+
+def _preview_urls(class_name: str) -> list[str]:
+    preview_dir = PREVIEWS_DIR / class_name
+    if not preview_dir.exists():
+        return []
+
+    urls: list[str] = []
+    for path in sorted(preview_dir.iterdir()):
+        if not path.is_file():
+            continue
+        urls.append(f"{PREVIEW_URL_PREFIX}/{quote(class_name)}/{quote(path.name)}")
+    return urls
+
+
+def _preview_images(class_name: str) -> list[Image.Image]:
+    preview_dir = PREVIEWS_DIR / class_name
+    if not preview_dir.exists():
+        return []
+
+    images: list[Image.Image] = []
+    for path in sorted(preview_dir.iterdir()):
+        if not path.is_file():
+            continue
+        with Image.open(path) as image:
+            images.append(image.convert("RGB"))
+    return images
+
+
+def _normalize_lookup_key(value: str) -> str:
+    return "".join(character.lower() for character in value if character.isalnum())
+
+
+def _dataset_image_paths(class_name: str) -> list[Path]:
+    class_dir = TRAIN_SPLIT_ROOT / class_name
+    if not class_dir.exists():
+        return []
+    return sorted(path for path in class_dir.iterdir() if path.is_file())
 
 
 def upsert_prototype_class(
@@ -155,6 +203,104 @@ def upsert_prototype_class(
     return product_id
 
 
+def ensure_catalog_embeddings(classifier: Any) -> int:
+    if PRECOMPUTED_IMAGE_EMBEDDINGS is not None and PRECOMPUTED_IMAGE_METADATA is not None:
+        print(
+            f"[retrieval] Using precomputed image embeddings from {PRECOMPUTED_IMAGE_EMBEDDINGS.name} "
+            f"and {PRECOMPUTED_IMAGE_METADATA.name}.",
+            flush=True,
+        )
+        return 0
+
+    if PRECOMPUTED_CLASS_EMBEDDINGS is not None and PRECOMPUTED_CLASS_METADATA is not None:
+        print(
+            f"[retrieval] Using precomputed catalog embeddings from {PRECOMPUTED_CLASS_EMBEDDINGS.name} "
+            f"and {PRECOMPUTED_CLASS_METADATA.name}.",
+            flush=True,
+        )
+        return 0
+
+    now = utc_now()
+    updated = 0
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                catalog_products.id,
+                catalog_products.class_name,
+                catalog_product_prototypes.reference_image_count
+            FROM catalog_products
+            LEFT JOIN catalog_product_prototypes
+                ON catalog_product_prototypes.product_id = catalog_products.id
+            ORDER BY catalog_products.display_name ASC
+            """
+        ).fetchall()
+        total = len(rows)
+        print(f"[retrieval] Checking catalog embeddings for {total} classes...", flush=True)
+
+        for index, row in enumerate(rows, start=1):
+            dataset_paths = _dataset_image_paths(row["class_name"])
+            if dataset_paths:
+                source_count = len(dataset_paths)
+                if row["reference_image_count"] == source_count:
+                    print(
+                        f"[retrieval] {index}/{total} {row['class_name']}: up to date from train split ({source_count} images)",
+                        flush=True,
+                    )
+                    continue
+                print(
+                    f"[retrieval] {index}/{total} {row['class_name']}: rebuilding from train split ({source_count} images)",
+                    flush=True,
+                )
+                prototype_feature = classifier.build_prototype_from_image_paths(dataset_paths)
+            else:
+                preview_images = _preview_images(row["class_name"])
+                if not preview_images:
+                    print(
+                        f"[retrieval] {index}/{total} {row['class_name']}: skipped, no train or preview images",
+                        flush=True,
+                    )
+                    continue
+                source_count = len(preview_images)
+                if row["reference_image_count"] == source_count:
+                    print(
+                        f"[retrieval] {index}/{total} {row['class_name']}: up to date from previews ({source_count} images)",
+                        flush=True,
+                    )
+                    continue
+                print(
+                    f"[retrieval] {index}/{total} {row['class_name']}: rebuilding from previews ({source_count} images)",
+                    flush=True,
+                )
+                prototype_feature = classifier.build_prototype_from_images(preview_images)
+
+            connection.execute(
+                """
+                INSERT INTO catalog_product_prototypes (
+                    id, product_id, embedding_json, reference_image_count, updated_at, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(product_id) DO UPDATE SET
+                    embedding_json = excluded.embedding_json,
+                    reference_image_count = excluded.reference_image_count,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    str(uuid.uuid4()),
+                    row["id"],
+                    json.dumps(prototype_feature.detach().cpu().tolist()),
+                    source_count,
+                    now,
+                    now,
+                ),
+            )
+            updated += 1
+        print(f"[retrieval] Catalog embedding rebuild complete. Updated {updated}/{total} classes.", flush=True)
+
+    return updated
+
+
 def load_classifier_prototypes() -> list[dict[str, Any]]:
     with get_connection() as connection:
         rows = connection.execute(
@@ -181,3 +327,168 @@ def load_classifier_prototypes() -> list[dict[str, Any]]:
             }
         )
     return items
+
+
+def _catalog_product_map() -> dict[str, dict[str, Any]]:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, class_name, display_name, brand, model
+            FROM catalog_products
+            ORDER BY display_name ASC
+            """
+        ).fetchall()
+    return {
+        row["class_name"]: {
+            "product_id": row["id"],
+            "class_name": row["class_name"],
+            "label": row["display_name"] or format_class_label(row["class_name"]),
+            "brand": row["brand"],
+            "model": row["model"],
+        }
+        for row in rows
+    }
+
+
+def _catalog_class_alias_map(product_map: dict[str, dict[str, Any]]) -> dict[str, str]:
+    aliases = {_normalize_lookup_key(class_name): class_name for class_name in product_map}
+    if PREVIEWS_DIR.exists():
+        for path in PREVIEWS_DIR.iterdir():
+            if path.is_dir():
+                aliases.setdefault(_normalize_lookup_key(path.name), path.name)
+    return aliases
+
+
+def _resolve_catalog_class_name(
+    class_name: str,
+    product_map: dict[str, dict[str, Any]],
+    alias_map: dict[str, str],
+) -> str:
+    if class_name in product_map:
+        return class_name
+    return alias_map.get(_normalize_lookup_key(class_name), class_name)
+
+
+def _load_precomputed_embedding_entries() -> list[dict[str, Any]]:
+    if PRECOMPUTED_CLASS_EMBEDDINGS is None or PRECOMPUTED_CLASS_METADATA is None:
+        return []
+
+    embeddings = np.load(PRECOMPUTED_CLASS_EMBEDDINGS)
+    metadata = json.loads(PRECOMPUTED_CLASS_METADATA.read_text())
+    if len(embeddings) != len(metadata):
+        raise ValueError(
+            "Precomputed class embeddings and metadata length mismatch: "
+            f"{len(embeddings)} vs {len(metadata)}"
+        )
+
+    product_map = _catalog_product_map()
+    alias_map = _catalog_class_alias_map(product_map)
+    items: list[dict[str, Any]] = []
+    for feature, meta in zip(embeddings, metadata):
+        raw_class_name = meta.get("class_name") or meta.get("class")
+        if not raw_class_name:
+            raise ValueError("Class embedding metadata is missing class_name/class.")
+        class_name = _resolve_catalog_class_name(str(raw_class_name), product_map, alias_map)
+        product = product_map.get(class_name, {})
+        items.append(
+            {
+                "product_id": product.get("product_id"),
+                "class_name": class_name,
+                "label": product.get("label") or meta.get("label") or format_class_label(class_name),
+                "brand": product.get("brand"),
+                "model": product.get("model"),
+                "feature": feature.tolist(),
+                "reference_image_count": meta.get("image_count", meta.get("count", 0)),
+                "preview_urls": _preview_urls(class_name),
+                "candidate_type": "catalog_embedding",
+            }
+        )
+    return items
+
+
+def _load_precomputed_image_entries() -> list[dict[str, Any]]:
+    if PRECOMPUTED_IMAGE_EMBEDDINGS is None or PRECOMPUTED_IMAGE_METADATA is None:
+        return []
+
+    embeddings = np.load(PRECOMPUTED_IMAGE_EMBEDDINGS)
+    metadata = json.loads(PRECOMPUTED_IMAGE_METADATA.read_text())
+    if len(embeddings) != len(metadata):
+        raise ValueError(
+            "Precomputed image embeddings and metadata length mismatch: "
+            f"{len(embeddings)} vs {len(metadata)}"
+        )
+
+    product_map = _catalog_product_map()
+    alias_map = _catalog_class_alias_map(product_map)
+    items: list[dict[str, Any]] = []
+    for feature, meta in zip(embeddings, metadata):
+        raw_class_name = meta.get("class_name") or meta.get("class")
+        if not raw_class_name:
+            raise ValueError("Image embedding metadata is missing class_name/class.")
+        class_name = _resolve_catalog_class_name(str(raw_class_name), product_map, alias_map)
+        product = product_map.get(class_name, {})
+        items.append(
+            {
+                "product_id": product.get("product_id"),
+                "class_name": class_name,
+                "label": product.get("label") or meta.get("label") or format_class_label(class_name),
+                "brand": product.get("brand"),
+                "model": product.get("model"),
+                "feature": feature.tolist(),
+                "reference_image_count": meta.get("image_count", 1),
+                "preview_urls": _preview_urls(class_name),
+                "candidate_type": "catalog_embedding",
+                "source_path": meta.get("path") or meta.get("sample_image"),
+                "embedding_source": "precomputed_image",
+            }
+        )
+    return items
+
+
+def _load_saved_prototype_entries(exclude_class_names: set[str] | None = None) -> list[dict[str, Any]]:
+    exclude_class_names = exclude_class_names or set()
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                catalog_products.id,
+                catalog_products.class_name,
+                catalog_products.display_name,
+                catalog_products.brand,
+                catalog_products.model,
+                catalog_product_prototypes.embedding_json,
+                catalog_product_prototypes.reference_image_count
+            FROM catalog_product_prototypes
+            JOIN catalog_products ON catalog_products.id = catalog_product_prototypes.product_id
+            ORDER BY catalog_products.display_name ASC
+            """
+        ).fetchall()
+
+    entries: list[dict[str, Any]] = []
+    for row in rows:
+        if row["class_name"] in exclude_class_names:
+            continue
+        entries.append(
+            {
+                "product_id": row["id"],
+                "class_name": row["class_name"],
+                "label": row["display_name"] or format_class_label(row["class_name"]),
+                "brand": row["brand"],
+                "model": row["model"],
+                "feature": json.loads(row["embedding_json"]),
+                "reference_image_count": row["reference_image_count"],
+                "preview_urls": _preview_urls(row["class_name"]),
+                "candidate_type": "catalog_embedding",
+            }
+        )
+    return entries
+
+
+def load_catalog_embedding_entries() -> list[dict[str, Any]]:
+    precomputed_entries = _load_precomputed_embedding_entries()
+    seen = {entry["class_name"] for entry in precomputed_entries}
+    return precomputed_entries + _load_saved_prototype_entries(seen)
+
+
+def load_catalog_image_embedding_entries() -> list[dict[str, Any]]:
+    return _load_precomputed_image_entries()

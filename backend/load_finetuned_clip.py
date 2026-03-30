@@ -1,9 +1,8 @@
 import torch
-import clip
 from pathlib import Path
 from PIL import Image
 from backend.config import MODEL_CHECKPOINT, MODEL_USE_CHECKPOINT
-from backend.model_loader import load_model
+from backend.model_loader import load_encoder
 
 def load_finetuned_model(checkpoint_path, device="cuda" if torch.cuda.is_available() else "cpu"):
     """
@@ -18,13 +17,17 @@ def load_finetuned_model(checkpoint_path, device="cuda" if torch.cuda.is_availab
         preprocess: CLIP preprocessing function
     """
     # Load base model (no fine-tuned weights yet)
-    model, preprocess = load_model(use_checkpoint=False)
+    encoder = load_encoder(
+        device=torch.device(device),
+        use_checkpoint=False,
+        checkpoint_path=checkpoint_path,
+        checkpoint_map_location=device,
+        checkpoint_strict=False,
+    )
+    model = encoder.model
+    preprocess = encoder.preprocess
 
-    # Load checkpoint
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    model.load_state_dict(checkpoint['model_state_dict'])
-
-    model.eval()
 
     print(f"Loaded fine-tuned model from {checkpoint_path}")
     print(f"Epoch: {checkpoint['epoch']}, Loss: {checkpoint['loss']:.4f}")
@@ -49,12 +52,14 @@ def test_model(model, preprocess, image_path, text_queries, device="cuda" if tor
     image = preprocess(Image.open(image_path)).unsqueeze(0).to(device)
 
     # Tokenize text
-    text = clip.tokenize(text_queries).to(device)
+    encoder = load_encoder(device=torch.device(device), use_checkpoint=False)
+    encoder.model = model
+    text = encoder.tokenize_texts(text_queries)
 
     # Get predictions
     with torch.no_grad():
-        image_features = model.encode_image(image)
-        text_features = model.encode_text(text)
+        image_features = encoder.encode_image_tensors(image)
+        text_features = encoder.encode_text_tokens(text)
 
         # Normalize features
         image_features /= image_features.norm(dim=-1, keepdim=True)
