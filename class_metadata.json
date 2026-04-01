@@ -1,0 +1,854 @@
+[
+  {
+    "class_name": "Air_Jordan_12",
+    "label": "Air Jordan 12",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_12/Air_Jordan_12_1.jpg"
+  },
+  {
+    "class_name": "Air_Jordan_1_High",
+    "label": "Air Jordan 1 High",
+    "image_count": 104,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_1_High/Air_Jordan_1_High_10.jpg"
+  },
+  {
+    "class_name": "Air_Jordan_1_Low",
+    "label": "Air Jordan 1 Low",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_1_Low/Air_Jordan_1_Low_1.jpg"
+  },
+  {
+    "class_name": "Air_Jordan_1_Mid",
+    "label": "Air Jordan 1 Mid",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_1_Mid/Air_Jordan_1_Mid_1.jpg"
+  },
+  {
+    "class_name": "Air_Jordan_1_Travis_Scott_Cactus_Jack",
+    "label": "Air Jordan 1 Travis Scott Cactus Jack",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_1_Travis_Scott_Cactus_Jack/Air_Jordan_1_Travis_Scott_Cactus_Jack_1.jpg"
+  },
+  {
+    "class_name": "Air_Jordan_2",
+    "label": "Air Jordan 2",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_2/Air_Jordan_2_1.jpg"
+  },
+  {
+    "class_name": "Air_Jordan_3",
+    "label": "Air Jordan 3",
+    "image_count": 104,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_3/Air_Jordan_3_10.jpg"
+  },
+  {
+    "class_name": "Air_Jordan_4",
+    "label": "Air Jordan 4",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_4/Air_Jordan_4_10.jpg"
+  },
+  {
+    "class_name": "Air_Jordan_5",
+    "label": "Air Jordan 5",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_5/Air_Jordan_5_1.jpg"
+  },
+  {
+    "class_name": "Air_Jordan_6",
+    "label": "Air Jordan 6",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Air_Jordan_6/Air_Jordan_6_10.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Flight",
+    "label": "Nike Air Flight",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Flight/Nike_Air_Flight_10.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Force_1_Low",
+    "label": "Nike Air Force 1 Low",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Force_1_Low/Nike_Air_Force_1_Low_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Force_1_Mid",
+    "label": "Nike Air Force 1 Mid",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Force_1_Mid/Nike_Air_Force_1_Mid_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Force_1_Shadow",
+    "label": "Nike Air Force 1 Shadow",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Force_1_Shadow/Nike_Air_Force_1_Shadow_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Huarache",
+    "label": "Nike Air Huarache",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Huarache/Nike_Air_Huarache_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max",
+    "label": "Nike Air Max",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max/Nike_Air_Max_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_1",
+    "label": "Nike Air Max 1",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_1/Nike_Air_Max_1_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_180",
+    "label": "Nike Air Max 180",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_180/Nike_Air_Max_180_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_200",
+    "label": "Nike Air Max 200",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_200/Nike_Air_Max_200_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_2021",
+    "label": "Nike Air Max 2021",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_2021/Nike_Air_Max_2021_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_2090",
+    "label": "Nike Air Max 2090",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_2090/Nike_Air_Max_2090_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_270",
+    "label": "Nike Air Max 270",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_270/Nike_Air_Max_270_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_270_React",
+    "label": "Nike Air Max 270 React",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_270_React/Nike_Air_Max_270_React_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_720",
+    "label": "Nike Air Max 720",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_720/Nike_Air_Max_720_101.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_90",
+    "label": "Nike Air Max 90",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_90/Nike_Air_Max_90_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_95",
+    "label": "Nike Air Max 95",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_95/Nike_Air_Max_95_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_96",
+    "label": "Nike Air Max 96",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_96/Nike_Air_Max_96_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_97",
+    "label": "Nike Air Max 97",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_97/Nike_Air_Max_97_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_98",
+    "label": "Nike Air Max 98",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_98/Nike_Air_Max_98_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Axis",
+    "label": "Nike Air Max Axis",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Axis/Nike_Air_Max_Axis_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Bliss",
+    "label": "Nike Air Max Bliss",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Bliss/Nike_Air_Max_Bliss_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Dawn",
+    "label": "Nike Air Max Dawn",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Dawn/Nike_Air_Max_Dawn_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Dia",
+    "label": "Nike Air Max Dia",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Dia/Nike_Air_Max_Dia_10.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Dn",
+    "label": "Nike Air Max Dn",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Dn/Nike_Air_Max_Dn_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Dn8",
+    "label": "Nike Air Max Dn8",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Dn8/Nike_Air_Max_Dn8_100.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Excee",
+    "label": "Nike Air Max Excee",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Excee/Nike_Air_Max_Excee_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Genome",
+    "label": "Nike Air Max Genome",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Genome/Nike_Air_Max_Genome_10.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Invigor",
+    "label": "Nike Air Max Invigor",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Invigor/Nike_Air_Max_Invigor_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_LTD_3",
+    "label": "Nike Air Max Ltd 3",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_LTD_3/Nike_Air_Max_LTD_3_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Oketo",
+    "label": "Nike Air Max Oketo",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Oketo/Nike_Air_Max_Oketo_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Plus",
+    "label": "Nike Air Max Plus",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Plus/Nike_Air_Max_Plus_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Pulse",
+    "label": "Nike Air Max Pulse",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Pulse/Nike_Air_Max_Pulse_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_SC",
+    "label": "Nike Air Max Sc",
+    "image_count": 28,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_SC/Nike_Air_Max_SC_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_SNDR",
+    "label": "Nike Air Max Sndr",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_SNDR/Nike_Air_Max_SNDR_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_SYSTM",
+    "label": "Nike Air Max Systm",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_SYSTM/Nike_Air_Max_SYSTM_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_TW",
+    "label": "Nike Air Max Tw",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_TW/Nike_Air_Max_TW_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Tailwind",
+    "label": "Nike Air Max Tailwind",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Tailwind/Nike_Air_Max_Tailwind_100.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Tuned",
+    "label": "Nike Air Max Tuned",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Tuned/Nike_Air_Max_Tuned_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Up",
+    "label": "Nike Air Max Up",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Up/Nike_Air_Max_Up_100.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_Verona",
+    "label": "Nike Air Max Verona",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_Verona/Nike_Air_Max_Verona_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Max_ZM950",
+    "label": "Nike Air Max Zm950",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Max_ZM950/Nike_Air_Max_ZM950_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_More_Uptempo",
+    "label": "Nike Air More Uptempo",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_More_Uptempo/Nike_Air_More_Uptempo_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Penny_2",
+    "label": "Nike Air Penny 2",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Penny_2/Nike_Air_Penny_2_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Presto",
+    "label": "Nike Air Presto",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Presto/Nike_Air_Presto_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_VaporMax",
+    "label": "Nike Air Vapormax",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_VaporMax/Nike_Air_VaporMax_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Vapormax_360",
+    "label": "Nike Air Vapormax 360",
+    "image_count": 100,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Vapormax_360/Nike_Air_Vapormax_360_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Vapormax_Evo",
+    "label": "Nike Air Vapormax Evo",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Vapormax_Evo/Nike_Air_Vapormax_Evo_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Zoom-Type",
+    "label": "Nike Air Zoom-Type",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Zoom-Type/Nike_Air_Zoom-Type_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Zoom_Alphafly",
+    "label": "Nike Air Zoom Alphafly",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Zoom_Alphafly/Nike_Air_Zoom_Alphafly_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Zoom_BB",
+    "label": "Nike Air Zoom Bb",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Zoom_BB/Nike_Air_Zoom_BB_10.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Zoom_SuperRep",
+    "label": "Nike Air Zoom Superrep",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Zoom_SuperRep/Nike_Air_Zoom_SuperRep_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Zoom_Terra_Kiger",
+    "label": "Nike Air Zoom Terra Kiger",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Zoom_Terra_Kiger/Nike_Air_Zoom_Terra_Kiger_1.jpg"
+  },
+  {
+    "class_name": "Nike_Air_Zoom_Vomero",
+    "label": "Nike Air Zoom Vomero",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Air_Zoom_Vomero/Nike_Air_Zoom_Vomero_1.jpg"
+  },
+  {
+    "class_name": "Nike_Bella",
+    "label": "Nike Bella",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Bella/Nike_Bella_1.jpg"
+  },
+  {
+    "class_name": "Nike_Blazer",
+    "label": "Nike Blazer",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Blazer/Nike_Blazer_1.jpg"
+  },
+  {
+    "class_name": "Nike_C1TY",
+    "label": "Nike C1Ty",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_C1TY/Nike_C1TY_1.jpg"
+  },
+  {
+    "class_name": "Nike_Calm",
+    "label": "Nike Calm",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Calm/Nike_Calm_101.jpg"
+  },
+  {
+    "class_name": "Nike_Cortez",
+    "label": "Nike Cortez",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Cortez/Nike_Cortez_1.jpg"
+  },
+  {
+    "class_name": "Nike_Court_Borough",
+    "label": "Nike Court Borough",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Court_Borough/Nike_Court_Borough_1.jpg"
+  },
+  {
+    "class_name": "Nike_Court_Vision",
+    "label": "Nike Court Vision",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Court_Vision/Nike_Court_Vision_1.jpg"
+  },
+  {
+    "class_name": "Nike_Daybreak",
+    "label": "Nike Daybreak",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Daybreak/Nike_Daybreak_1.jpg"
+  },
+  {
+    "class_name": "Nike_Downshifter",
+    "label": "Nike Downshifter",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Downshifter/Nike_Downshifter_1.jpg"
+  },
+  {
+    "class_name": "Nike_Dunk_High",
+    "label": "Nike Dunk High",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Dunk_High/Nike_Dunk_High_1.jpg"
+  },
+  {
+    "class_name": "Nike_Dunk_Low",
+    "label": "Nike Dunk Low",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Dunk_Low/Nike_Dunk_Low_100.jpg"
+  },
+  {
+    "class_name": "Nike_Epic_React",
+    "label": "Nike Epic React",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Epic_React/Nike_Epic_React_1.jpg"
+  },
+  {
+    "class_name": "Nike_Flex_Runner",
+    "label": "Nike Flex Runner",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Flex_Runner/Nike_Flex_Runner_1.jpg"
+  },
+  {
+    "class_name": "Nike_Free",
+    "label": "Nike Free",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Free/Nike_Free_1.jpg"
+  },
+  {
+    "class_name": "Nike_Full_Force",
+    "label": "Nike Full Force",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Full_Force/Nike_Full_Force_101.jpg"
+  },
+  {
+    "class_name": "Nike_Gamma_Force",
+    "label": "Nike Gamma Force",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Gamma_Force/Nike_Gamma_Force_1.jpg"
+  },
+  {
+    "class_name": "Nike_ISPA_Sense_Flyknit",
+    "label": "Nike Ispa Sense Flyknit",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_ISPA_Sense_Flyknit/Nike_ISPA_Sense_Flyknit_1.jpg"
+  },
+  {
+    "class_name": "Nike_ISPA_Universal",
+    "label": "Nike Ispa Universal",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_ISPA_Universal/Nike_ISPA_Universal_1.jpg"
+  },
+  {
+    "class_name": "Nike_Internationalist",
+    "label": "Nike Internationalist",
+    "image_count": 97,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Internationalist/Nike_Internationalist_1.jpg"
+  },
+  {
+    "class_name": "Nike_Joyride",
+    "label": "Nike Joyride",
+    "image_count": 100,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Joyride/Nike_Joyride_1.jpg"
+  },
+  {
+    "class_name": "Nike_Juniper",
+    "label": "Nike Juniper",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Juniper/Nike_Juniper_1.jpg"
+  },
+  {
+    "class_name": "Nike_Kobe",
+    "label": "Nike Kobe",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Kobe/Nike_Kobe_1.jpg"
+  },
+  {
+    "class_name": "Nike_LeBron",
+    "label": "Nike Lebron",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_LeBron/Nike_LeBron_1.jpg"
+  },
+  {
+    "class_name": "Nike_Legend_React",
+    "label": "Nike Legend React",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Legend_React/Nike_Legend_React_1.jpg"
+  },
+  {
+    "class_name": "Nike_M2K_Tekno",
+    "label": "Nike M2K Tekno",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_M2K_Tekno/Nike_M2K_Tekno_1.jpg"
+  },
+  {
+    "class_name": "Nike_Mercurial",
+    "label": "Nike Mercurial",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Mercurial/Nike_Mercurial_102.jpg"
+  },
+  {
+    "class_name": "Nike_Metcon",
+    "label": "Nike Metcon",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Metcon/Nike_Metcon_100.jpg"
+  },
+  {
+    "class_name": "Nike_Miler",
+    "label": "Nike Miler",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Miler/Nike_Miler_1.jpg"
+  },
+  {
+    "class_name": "Nike_NOCTA",
+    "label": "Nike Nocta",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_NOCTA/Nike_NOCTA_1.jpg"
+  },
+  {
+    "class_name": "Nike_Odyssey_React",
+    "label": "Nike Odyssey React",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Odyssey_React/Nike_Odyssey_React_1.jpg"
+  },
+  {
+    "class_name": "Nike_P-6000",
+    "label": "Nike P-6000",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_P-6000/Nike_P-6000_1.jpg"
+  },
+  {
+    "class_name": "Nike_Phantom",
+    "label": "Nike Phantom",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Phantom/Nike_Phantom_1.jpg"
+  },
+  {
+    "class_name": "Nike_RYZ_365",
+    "label": "Nike Ryz 365",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_RYZ_365/Nike_RYZ_365_1.jpg"
+  },
+  {
+    "class_name": "Nike_React_Element_55",
+    "label": "Nike React Element 55",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_React_Element_55/Nike_React_Element_55_1.jpg"
+  },
+  {
+    "class_name": "Nike_React_Infinity",
+    "label": "Nike React Infinity",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_React_Infinity/Nike_React_Infinity_1.jpg"
+  },
+  {
+    "class_name": "Nike_React_Metcon",
+    "label": "Nike React Metcon",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_React_Metcon/Nike_React_Metcon_10.jpg"
+  },
+  {
+    "class_name": "Nike_React_Vision",
+    "label": "Nike React Vision",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_React_Vision/Nike_React_Vision_10.jpg"
+  },
+  {
+    "class_name": "Nike_Renew",
+    "label": "Nike Renew",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Renew/Nike_Renew_1.jpg"
+  },
+  {
+    "class_name": "Nike_Revolution_6",
+    "label": "Nike Revolution 6",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Revolution_6/Nike_Revolution_6_1.jpg"
+  },
+  {
+    "class_name": "Nike_Revolution_7",
+    "label": "Nike Revolution 7",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Revolution_7/Nike_Revolution_7_1.jpg"
+  },
+  {
+    "class_name": "Nike_Roshe",
+    "label": "Nike Roshe",
+    "image_count": 61,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Roshe/Nike_Roshe_1.jpg"
+  },
+  {
+    "class_name": "Nike_Shox",
+    "label": "Nike Shox",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Shox/Nike_Shox_1.jpg"
+  },
+  {
+    "class_name": "Nike_Star_Runner",
+    "label": "Nike Star Runner",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Star_Runner/Nike_Star_Runner_1.jpg"
+  },
+  {
+    "class_name": "Nike_Stefan_Janoski",
+    "label": "Nike Stefan Janoski",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Stefan_Janoski/Nike_Stefan_Janoski_1.jpg"
+  },
+  {
+    "class_name": "Nike_Tanjun",
+    "label": "Nike Tanjun",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Tanjun/Nike_Tanjun_1.jpg"
+  },
+  {
+    "class_name": "Nike_Tech_Fleece",
+    "label": "Nike Tech Fleece",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Tech_Fleece/Nike_Tech_Fleece_1.jpg"
+  },
+  {
+    "class_name": "Nike_Tech_Hera",
+    "label": "Nike Tech Hera",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Tech_Hera/Nike_Tech_Hera_1.jpg"
+  },
+  {
+    "class_name": "Nike_Tiempo",
+    "label": "Nike Tiempo",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Tiempo/Nike_Tiempo_1.jpg"
+  },
+  {
+    "class_name": "Nike_V2K_Run",
+    "label": "Nike V2K Run",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_V2K_Run/Nike_V2K_Run_1.jpg"
+  },
+  {
+    "class_name": "Nike_Venture_Runner",
+    "label": "Nike Venture Runner",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Venture_Runner/Nike_Venture_Runner_1.jpg"
+  },
+  {
+    "class_name": "Nike_Victori_One",
+    "label": "Nike Victori One",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Victori_One/Nike_Victori_One_1.jpg"
+  },
+  {
+    "class_name": "Nike_Waffle_One",
+    "label": "Nike Waffle One",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Waffle_One/Nike_Waffle_One_1.jpg"
+  },
+  {
+    "class_name": "Nike_Waffle_Racer",
+    "label": "Nike Waffle Racer",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Waffle_Racer/Nike_Waffle_Racer_1.jpg"
+  },
+  {
+    "class_name": "Nike_Wildhorse",
+    "label": "Nike Wildhorse",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Wildhorse/Nike_Wildhorse_1.jpg"
+  },
+  {
+    "class_name": "Nike_Zegama",
+    "label": "Nike Zegama",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Zegama/Nike_Zegama_1.jpg"
+  },
+  {
+    "class_name": "Nike_ZoomX_Vaporfly",
+    "label": "Nike Zoomx Vaporfly",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_ZoomX_Vaporfly/Nike_ZoomX_Vaporfly_10.jpg"
+  },
+  {
+    "class_name": "Nike_ZoomX_invincible",
+    "label": "Nike Zoomx Invincible",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_ZoomX_invincible/Nike_ZoomX_invincible_1.jpg"
+  },
+  {
+    "class_name": "Nike_Zoom_Fly",
+    "label": "Nike Zoom Fly",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Zoom_Fly/Nike_Zoom_Fly_1.jpg"
+  },
+  {
+    "class_name": "Nike_Zoom_Freak",
+    "label": "Nike Zoom Freak",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Zoom_Freak/Nike_Zoom_Freak_100.jpg"
+  },
+  {
+    "class_name": "Nike_Zoom_Pegasus",
+    "label": "Nike Zoom Pegasus",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Nike_Zoom_Pegasus/Nike_Zoom_Pegasus_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_950_Boot",
+    "label": "Yeezy 950 Boot",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_950_Boot/Yeezy_950_Boot_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Basketball_Quantum",
+    "label": "Yeezy Basketball Quantum",
+    "image_count": 93,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Basketball_Quantum/Yeezy_Basketball_Quantum_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_350",
+    "label": "Yeezy Boost 350",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_350/Yeezy_Boost_350_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_350_V2",
+    "label": "Yeezy Boost 350 V2",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_350_V2/Yeezy_Boost_350_V2_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_380",
+    "label": "Yeezy Boost 380",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_380/Yeezy_Boost_380_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_450",
+    "label": "Yeezy Boost 450",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_450/Yeezy_Boost_450_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_500",
+    "label": "Yeezy Boost 500",
+    "image_count": 24,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_500/Yeezy_Boost_500_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_500_High",
+    "label": "Yeezy Boost 500 High",
+    "image_count": 25,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_500_High/Yeezy_Boost_500_High_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_700",
+    "label": "Yeezy Boost 700",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_700/Yeezy_Boost_700_10.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_700_V2",
+    "label": "Yeezy Boost 700 V2",
+    "image_count": 104,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_700_V2/Yeezy_Boost_700_V2_10.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_700_V3",
+    "label": "Yeezy Boost 700 V3",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_700_V3/Yeezy_Boost_700_V3_100.jpg"
+  },
+  {
+    "class_name": "Yeezy_Boost_750",
+    "label": "Yeezy Boost 750",
+    "image_count": 81,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Boost_750/Yeezy_Boost_750_100.jpg"
+  },
+  {
+    "class_name": "Yeezy_Desert_Boot",
+    "label": "Yeezy Desert Boot",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Desert_Boot/Yeezy_Desert_Boot_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Foam_Runner",
+    "label": "Yeezy Foam Runner",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Foam_Runner/Yeezy_Foam_Runner_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Knit_Runner",
+    "label": "Yeezy Knit Runner",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Knit_Runner/Yeezy_Knit_Runner_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Knit_Runner_Boot",
+    "label": "Yeezy Knit Runner Boot",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Knit_Runner_Boot/Yeezy_Knit_Runner_Boot_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_NSLTD_Boot",
+    "label": "Yeezy Nsltd Boot",
+    "image_count": 105,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_NSLTD_Boot/Yeezy_NSLTD_Boot_10.jpg"
+  },
+  {
+    "class_name": "Yeezy_Quantum_Lifestyle",
+    "label": "Yeezy Quantum Lifestyle",
+    "image_count": 104,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Quantum_Lifestyle/Yeezy_Quantum_Lifestyle_1.jpg"
+  },
+  {
+    "class_name": "Yeezy_Slide",
+    "label": "Yeezy Slide",
+    "image_count": 104,
+    "sample_image": "/content/drive/MyDrive/thesis/dataset/sneakers-split/train/Yeezy_Slide/Yeezy_Slide_100.jpg"
+  }
+]
