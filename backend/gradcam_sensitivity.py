@@ -8,7 +8,13 @@ import torch
 from PIL import Image
 from PIL import ImageFilter
 
-from backend.eval_model import EvaluationImageEncoder, format_class_label
+from backend.app.finetuned_classifier_service import FineTunedSneakerClassifier
+from backend.eval_model import (
+    EvaluationImageEncoder,
+    ZeroShotSneakerClassifier,
+    format_class_label,
+    load_checkpoint_class_names,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,6 +65,23 @@ def parse_args() -> argparse.Namespace:
         help="One or more reference images used as the similarity target instead of text.",
     )
     parser.add_argument(
+        "--predict",
+        action="store_true",
+        help="Run zero-shot prediction and include top-k results in the report.",
+    )
+    parser.add_argument(
+        "--predict-root",
+        type=Path,
+        default=None,
+        help="Root directory containing one folder per class for prediction labels.",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=5,
+        help="Number of predictions to include when --predict is used.",
+    )
+    parser.add_argument(
         "--block-index",
         type=int,
         default=-2,
@@ -104,17 +127,107 @@ def resolve_prompt_text(args: argparse.Namespace) -> str | None:
 def validate_target_args(args: argparse.Namespace, prompt_text: str | None) -> None:
     has_prompt_target = prompt_text is not None
     has_reference_target = bool(args.reference_image)
+    has_prediction_target = bool(args.predict)
 
     if has_prompt_target and has_reference_target:
         raise ValueError("Choose either a text target or reference images, not both.")
 
-    if not has_prompt_target and not has_reference_target:
-        raise ValueError("Pass --prompt-text, --class-name, or --reference-image.")
+    if not has_prompt_target and not has_reference_target and not has_prediction_target:
+        raise ValueError("Pass --prompt-text, --class-name, --reference-image, or --predict.")
 
 
 def load_rgb_image(path: Path) -> Image.Image:
     with Image.open(path) as image:
         return image.convert("RGB")
+
+
+def list_class_names_from_root(root: Path) -> list[str]:
+    if not root.exists():
+        raise FileNotFoundError(f"Prediction root not found: {root}")
+
+    class_names: list[str] = []
+    for path in sorted(root.iterdir()):
+        if path.is_dir():
+            class_names.append(path.name)
+
+    if not class_names:
+        raise ValueError(f"No class directories found in prediction root: {root}")
+
+    return class_names
+
+
+def infer_prediction_root(image_path: Path) -> Path | None:
+    parent = image_path.parent
+    grandparent = parent.parent
+    if not grandparent.exists():
+        return None
+
+    sibling_directories = [path for path in grandparent.iterdir() if path.is_dir()]
+    if not sibling_directories:
+        return None
+
+    if parent.name not in {path.name for path in sibling_directories}:
+        return None
+
+    return grandparent
+
+
+def resolve_prediction_class_names(
+    *,
+    checkpoint_path: str | Path | None,
+    predict_root: Path | None,
+    image_path: Path,
+) -> tuple[list[str], str | None]:
+    if predict_root is not None:
+        class_names = list_class_names_from_root(predict_root)
+        return class_names, str(predict_root)
+
+    inferred_root = infer_prediction_root(image_path)
+    if inferred_root is not None:
+        class_names = list_class_names_from_root(inferred_root)
+        return class_names, str(inferred_root)
+
+    if checkpoint_path is not None:
+        class_names = load_checkpoint_class_names(Path(checkpoint_path))
+        return class_names, None
+
+    raise ValueError(
+        "Could not determine prediction classes. Pass --predict-root or use an image inside a "
+        "class-folder dataset."
+    )
+
+
+def run_prediction(
+    *,
+    image_path: Path,
+    checkpoint_path: str | Path | None,
+    backend: str | None,
+    model_name: str | None,
+    pretrained: str | None,
+    predict_root: Path | None,
+    top_k: int,
+) -> tuple[list[dict[str, float | str]], float, str | None, str]:
+    if checkpoint_path is not None:
+        classifier = FineTunedSneakerClassifier(checkpoint_path=checkpoint_path)
+        result = classifier.predict_image_path(image_path, k=top_k)
+        predictions = result["top_k"]
+        margin = float(result["margin_vs_second"])
+        return predictions, margin, None, "app_checkpoint_classifier"
+
+    class_names, resolved_root = resolve_prediction_class_names(
+        checkpoint_path=checkpoint_path,
+        predict_root=predict_root,
+        image_path=image_path,
+    )
+    classifier = ZeroShotSneakerClassifier(
+        class_names=class_names,
+        checkpoint_path=checkpoint_path,
+        backend=backend,
+        model_name=model_name,
+        pretrained=pretrained,
+    )
+    predictions, margin = classifier.predict_image_path(image_path, top_k=top_k)
+    return predictions, margin, resolved_root, "zero_shot_classifier"
 
 
 def normalize_feature(feature: torch.Tensor) -> torch.Tensor:
@@ -369,6 +482,32 @@ def main() -> None:
     prompt_text = resolve_prompt_text(args)
     validate_target_args(args, prompt_text)
 
+    prediction_results: list[dict[str, float | str]] | None = None
+    prediction_margin: float | None = None
+    prediction_root: str | None = None
+    prediction_source: str | None = None
+    predicted_class_name: str | None = None
+    predicted_prompt_text: str | None = None
+
+    if args.predict:
+        prediction_results, prediction_margin, prediction_root, prediction_source = run_prediction(
+            image_path=args.image,
+            checkpoint_path=args.checkpoint,
+            backend=args.backend,
+            model_name=args.model_name,
+            pretrained=args.pretrained,
+            predict_root=args.predict_root,
+            top_k=args.top_k,
+        )
+        predicted_class_name = str(prediction_results[0]["class_name"])
+        predicted_prompt_text = args.prompt_template.format(
+            class_name=predicted_class_name,
+            label=format_class_label(predicted_class_name),
+        )
+
+        if prompt_text is None and not args.reference_image:
+            prompt_text = predicted_prompt_text
+
     encoder = EvaluationImageEncoder(
         checkpoint_path=args.checkpoint,
         backend=args.backend,
@@ -383,6 +522,8 @@ def main() -> None:
     if prompt_text is not None:
         target_feature = build_text_target_feature(encoder, prompt_text)
         target_description["prompt_text"] = prompt_text
+        if predicted_class_name is not None and prompt_text == predicted_prompt_text:
+            target_description["target_source"] = "predicted_top1"
     else:
         reference_paths = [Path(path) for path in args.reference_image]
         for path in reference_paths:
@@ -408,8 +549,16 @@ def main() -> None:
         "target": target_description,
         "visualization_blur_radius": args.visualization_blur_radius,
         "overlay_alpha": args.overlay_alpha,
+        "prediction_enabled": args.predict,
         **gradcam_summary,
     }
+    if prediction_results is not None:
+        report["prediction"] = {
+            "prediction_source": prediction_source,
+            "prediction_root": prediction_root,
+            "top_k": prediction_results,
+            "margin_vs_second": prediction_margin,
+        }
     save_outputs(
         image,
         coarse_heatmap,
