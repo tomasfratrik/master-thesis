@@ -340,8 +340,8 @@
 	}
 
 	.role-badge.admin {
-		background: rgba(20, 85, 117, 0.12);
-		color: #145575;
+		background: rgba(212, 87, 46, 0.12);
+		color: #b45534;
 	}
 
 	.meta-list {

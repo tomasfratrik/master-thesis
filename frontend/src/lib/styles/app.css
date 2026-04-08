@@ -23,14 +23,14 @@
 	--color-secondary: #d45a31;
 	--color-secondary-content: #fff4ec;
 
-	--color-accent: #145575;
-	--color-accent-content: #f2fbff;
+	--color-accent: #b45534;
+	--color-accent-content: #fff4ec;
 
 	--color-neutral: #41342d;
 	--color-neutral-content: #f6efe6;
 
-	--color-info: #2f7195;
-	--color-info-content: #f4fbff;
+	--color-info: #9d6138;
+	--color-info-content: #fff4ec;
 
 	--color-success: #3d7d59;
 	--color-success-content: #f2fff7;
@@ -62,7 +62,7 @@ body {
 	margin: 0;
 	background:
 		radial-gradient(circle at top left, rgba(212, 87, 46, 0.14), transparent 34%),
-		radial-gradient(circle at top right, rgba(20, 85, 117, 0.12), transparent 28%),
+		radial-gradient(circle at top right, rgba(183, 115, 47, 0.1), transparent 28%),
 		linear-gradient(180deg, #efe7da 0%, #f7f2ea 52%, #f2ece3 100%);
 	background-repeat: no-repeat;
 	background-size: 100% 100%;
@@ -363,14 +363,14 @@ body {
 
 .upload-sample {
 	padding: 1.5rem;
-	border: 1.5px dashed rgba(17, 88, 122, 0.35);
+	border: 1.5px dashed rgba(212, 87, 46, 0.28);
 	border-radius: 26px;
 	background:
 		linear-gradient(135deg, rgba(255, 255, 255, 0.64), rgba(242, 231, 218, 0.92)),
 		repeating-linear-gradient(
 			-45deg,
-			rgba(17, 88, 122, 0.03) 0,
-			rgba(17, 88, 122, 0.03) 12px,
+			rgba(212, 87, 46, 0.04) 0,
+			rgba(212, 87, 46, 0.04) 12px,
 			transparent 12px,
 			transparent 24px
 		);
