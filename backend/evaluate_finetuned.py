@@ -11,6 +11,7 @@ from backend.eval_model import (
     list_labeled_images,
     load_checkpoint_class_names,
 )
+from backend.tagging_store import load_tag_index
 
 
 def parse_args() -> argparse.Namespace:
@@ -62,6 +63,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional path to save the full evaluation report as JSON.",
     )
+    parser.add_argument(
+        "--tags-file",
+        type=Path,
+        default=None,
+        help="Optional JSONL file with per-image tags keyed by relative path under test_root.",
+    )
     return parser.parse_args()
 
 
@@ -73,14 +80,14 @@ def predict_scores(
     return classifier.predict_image_path(image_path, top_k=top_k)
 
 
-def get_class_stats(
-    per_class: dict[str, dict[str, int]],
-    class_name: str,
+def get_bucket_stats(
+    buckets: dict[str, dict[str, int]],
+    bucket_name: str,
 ) -> dict[str, int]:
-    if class_name not in per_class:
-        per_class[class_name] = {"total": 0, "top1_correct": 0, "topk_correct": 0}
+    if bucket_name not in buckets:
+        buckets[bucket_name] = {"total": 0, "top1_correct": 0, "topk_correct": 0}
 
-    return per_class[class_name]
+    return buckets[bucket_name]
 
 
 def second_best_score(top_predictions: list[dict[str, object]]) -> float:
@@ -90,11 +97,11 @@ def second_best_score(top_predictions: list[dict[str, object]]) -> float:
     return float(top_predictions[1]["score"])
 
 
-def build_per_class_summary(per_class: dict[str, dict[str, int]]) -> dict[str, dict[str, float | int]]:
+def build_bucket_summary(buckets: dict[str, dict[str, int]]) -> dict[str, dict[str, float | int]]:
     summary: dict[str, dict[str, float | int]] = {}
 
-    for class_name, stats in sorted(per_class.items()):
-        summary[class_name] = {
+    for bucket_name, stats in sorted(buckets.items()):
+        summary[bucket_name] = {
             "total": stats["total"],
             "top1_correct": stats["top1_correct"],
             "topk_correct": stats["topk_correct"],
@@ -120,6 +127,9 @@ def main() -> None:
         raise RuntimeError(f"No labeled images found under {test_root}")
     if args.limit is not None:
         dataset = dataset[: args.limit]
+    tag_index = load_tag_index(args.tags_file)
+    dataset_image_keys = {image_path.relative_to(test_root).as_posix() for image_path, _ in dataset}
+    unmatched_tag_entries = sorted(set(tag_index) - dataset_image_keys)
 
     class_names = (
         load_checkpoint_class_names(checkpoint_path)
@@ -143,7 +153,11 @@ def main() -> None:
     correct_margins: list[float] = []
     incorrect_margins: list[float] = []
     per_class: dict[str, dict[str, int]] = {}
+    per_tag: dict[str, dict[str, int]] = {}
     failures: list[dict[str, object]] = []
+    failures_by_tag: dict[str, list[dict[str, object]]] = {}
+    tagged_images = 0
+    untagged_images = 0
 
     for image_path, expected_class in tqdm(dataset, desc="Evaluating"):
         top_predictions, margin = predict_scores(
@@ -151,40 +165,59 @@ def main() -> None:
             image_path=image_path,
             top_k=args.top_k,
         )
+        image_key = image_path.relative_to(test_root).as_posix()
+        image_tags = tag_index.get(image_key, [])
         predicted_class = str(top_predictions[0]["class_name"])
         topk_classes = [str(item["class_name"]) for item in top_predictions]
         is_top1 = predicted_class == expected_class
         is_topk = expected_class in topk_classes
 
-        stats = get_class_stats(per_class, expected_class)
+        if image_tags:
+            tagged_images += 1
+        else:
+            untagged_images += 1
+
+        stats = get_bucket_stats(per_class, expected_class)
         stats["total"] += 1
+
+        for tag in image_tags:
+            tag_stats = get_bucket_stats(per_tag, tag)
+            tag_stats["total"] += 1
 
         if is_top1:
             top1_correct += 1
             stats["top1_correct"] += 1
+            for tag in image_tags:
+                per_tag[tag]["top1_correct"] += 1
             correct_margins.append(margin)
         else:
             incorrect_margins.append(margin)
-            failures.append(
-                {
-                    "image": str(image_path),
-                    "expected_class": expected_class,
-                    "predicted_class": predicted_class,
-                    "top1_score": float(top_predictions[0]["score"]),
-                    "second_best_score": second_best_score(top_predictions),
-                    "margin_vs_second": margin,
-                    "top_k": top_predictions,
-                }
-            )
+            failure = {
+                "image": str(image_path),
+                "image_key": image_key,
+                "tags": image_tags,
+                "expected_class": expected_class,
+                "predicted_class": predicted_class,
+                "top1_score": float(top_predictions[0]["score"]),
+                "second_best_score": second_best_score(top_predictions),
+                "margin_vs_second": margin,
+                "top_k": top_predictions,
+            }
+            failures.append(failure)
+            for tag in image_tags:
+                failures_by_tag.setdefault(tag, []).append(failure)
 
         if is_topk:
             topk_correct += 1
             stats["topk_correct"] += 1
+            for tag in image_tags:
+                per_tag[tag]["topk_correct"] += 1
 
         top1_scores.append(float(top_predictions[0]["score"]))
         top1_margins.append(margin)
 
-    per_class_summary = build_per_class_summary(per_class)
+    per_class_summary = build_bucket_summary(per_class)
+    per_tag_summary = build_bucket_summary(per_tag)
 
     class_source = "test_root"
     if checkpoint_path is not None:
@@ -204,8 +237,14 @@ def main() -> None:
         "class_count": len(class_names),
         "class_source": class_source,
         "prompt_template": args.prompt_template,
+        "tags_file": None if args.tags_file is None else str(args.tags_file),
+        "tag_entries_loaded": len(tag_index),
+        "tagged_images": tagged_images,
+        "untagged_images": untagged_images,
+        "unmatched_tag_entries": len(unmatched_tag_entries),
         "images_evaluated": total,
         "classes_evaluated": len(per_class_summary),
+        "tags_evaluated": len(per_tag_summary),
         "top1_accuracy": top1_correct / total,
         f"top{args.top_k}_accuracy": topk_correct / total,
         "mean_top1_score": mean(top1_scores),
@@ -218,6 +257,15 @@ def main() -> None:
     report = {
         "summary": summary,
         "per_class": per_class_summary,
+        "per_tag": per_tag_summary,
+        "unmatched_tag_entries": unmatched_tag_entries[:100],
+        "hardest_errors_by_tag": {
+            tag: sorted(
+                tag_failures,
+                key=lambda item: (item["margin_vs_second"], -float(item["top1_score"])),
+            )[:10]
+            for tag, tag_failures in sorted(failures_by_tag.items())
+        },
         "hardest_errors": sorted(
             failures,
             key=lambda item: (item["margin_vs_second"], -float(item["top1_score"])),
@@ -233,6 +281,18 @@ def main() -> None:
                 f"- expected={item['expected_class']} predicted={item['predicted_class']} "
                 f"score={item['top1_score']:.4f} margin={item['margin_vs_second']:.4f} "
                 f"path={item['image']}"
+            )
+
+    if per_tag_summary:
+        print("\nPer-tag summary:")
+        for tag, stats in sorted(
+            per_tag_summary.items(),
+            key=lambda item: item[1]["top1_accuracy"],
+        ):
+            print(
+                f"- {tag}: total={stats['total']} "
+                f"top1={stats['top1_accuracy']:.4f} "
+                f"top{args.top_k}={stats['topk_accuracy']:.4f}"
             )
 
     if args.output_json is not None:
