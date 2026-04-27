@@ -3,7 +3,10 @@ import re
 
 
 def format_class_label(class_name: str) -> str:
-    return class_name.replace("_", " ").title()
+    label = class_name.replace("_", " ").title()
+    if label.startswith("Air Jordan "):
+        return f"Nike {label}"
+    return label
 
 
 def tokenize_class_name(class_name: str) -> list[str]:
@@ -28,6 +31,18 @@ def build_brand_prefix_map(class_names: list[str]) -> dict[str, str]:
 
     brands: dict[str, str] = {}
     for class_name, tokens in tokenized.items():
+        if len(tokens) >= 2 and tokens[0].lower() == "air" and tokens[1].lower() == "jordan":
+            brands[class_name] = "Nike"
+            continue
+        if (
+            len(tokens) >= 3
+            and tokens[0].lower() == "nike"
+            and tokens[1].lower() == "air"
+            and tokens[2].lower() == "jordan"
+        ):
+            brands[class_name] = "Nike"
+            continue
+
         brand_tokens = [tokens[0]]
         max_brand_tokens = min(3, len(tokens))
 

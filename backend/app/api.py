@@ -187,6 +187,32 @@ def _prepared_image_payload(prepared: PreparedImage) -> dict[str, str]:
     }
 
 
+def _supported_sneaker_key(class_name: str) -> str:
+    normalized = class_name.strip().replace("-", "_")
+    normalized = "_".join(part for part in normalized.split("_") if part)
+    lower = normalized.lower()
+    if lower.startswith("nike_air_jordan_"):
+        normalized = "Air_Jordan_" + normalized[len("Nike_Air_Jordan_") :]
+    return normalized.lower()
+
+
+def _supported_sneaker_brand(class_name: str, fallback_brand: str | None = None) -> str:
+    normalized = _supported_sneaker_key(class_name)
+    if normalized.startswith("air_jordan_"):
+        return "Nike"
+    return fallback_brand or "Other"
+
+
+def _supported_sneaker_label(class_name: str, fallback_label: str | None = None) -> str:
+    if fallback_label and _supported_sneaker_key(class_name).startswith("air_jordan_"):
+        if fallback_label.startswith("Nike "):
+            return fallback_label
+        return f"Nike {fallback_label}"
+    if fallback_label:
+        return fallback_label
+    return format_class_label(class_name)
+
+
 async def _read_uploads(files: list[UploadFile]) -> list[tuple[str, bytes, str]]:
     uploads: list[tuple[str, bytes, str]] = []
     for file in files:
@@ -363,6 +389,10 @@ async def supported_sneakers() -> JSONResponse:
     if classifier is None:
         raise HTTPException(status_code=503, detail=f"Predictor unavailable: {classifier_error}")
 
+    supported_class_names = {
+        _supported_sneaker_key(name): name
+        for name in classifier.class_names
+    }
     with get_connection() as connection:
         metadata_rows = connection.execute(
             """
@@ -372,29 +402,31 @@ async def supported_sneakers() -> JSONResponse:
             """
         ).fetchall()
 
+    metadata_by_key = {
+        _supported_sneaker_key(row["class_name"]): row
+        for row in metadata_rows
+    }
+
     grouped: dict[str, list[dict[str, str]]] = {}
     items: list[dict[str, str]] = []
-    if metadata_rows:
-        for row in metadata_rows:
-            brand = row["brand"] or "Other"
-            item = {
-                "class_name": row["class_name"],
-                "label": row["display_name"],
-                "brand": brand,
-            }
-            items.append(item)
-            grouped.setdefault(brand, []).append(item)
-    else:
-        brand_map = build_brand_prefix_map(sorted(classifier.class_names))
-        for class_name in sorted(classifier.class_names):
-            brand = brand_map[class_name]
-            item = {
-                "class_name": class_name,
-                "label": format_class_label(class_name),
-                "brand": brand,
-            }
-            items.append(item)
-            grouped.setdefault(brand, []).append(item)
+    brand_map = build_brand_prefix_map(sorted(classifier.class_names))
+    for class_name in sorted(classifier.class_names):
+        supported_key = _supported_sneaker_key(class_name)
+        row = metadata_by_key.get(supported_key)
+        brand = _supported_sneaker_brand(
+            class_name,
+            row["brand"] if row is not None else brand_map.get(class_name),
+        )
+        item = {
+            "class_name": class_name,
+            "label": _supported_sneaker_label(
+                class_name,
+                row["display_name"] if row is not None else None,
+            ),
+            "brand": brand,
+        }
+        items.append(item)
+        grouped.setdefault(brand, []).append(item)
 
     brands = [
         {"brand": brand, "count": len(grouped[brand])}
@@ -407,6 +439,9 @@ async def supported_sneakers() -> JSONResponse:
             "items": items,
             "brands": brands,
             "groups": {brand: grouped[brand] for brand in sorted(grouped)},
+            "class_source": "checkpoint",
+            "checkpoint_path": str(classifier.checkpoint_path),
+            "checkpoint_name": classifier.checkpoint_path.name,
         }
     )
 

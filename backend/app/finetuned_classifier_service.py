@@ -6,12 +6,13 @@ from urllib.parse import quote
 import torch
 from PIL import Image
 
+from .catalog_metadata import format_class_label
 from backend.config import DEVICE, MODEL_NAME, PREVIEWS_DIR, PREVIEW_LIMIT, PREVIEW_URL_PREFIX
 from backend.model_loader import load_encoder
 
 
 def _format_class_name(class_name: str) -> str:
-    return class_name.replace("_", " ").title()
+    return format_class_label(class_name)
 
 
 def _preview_urls(class_name: str, limit: int = PREVIEW_LIMIT) -> list[str]:

@@ -9,6 +9,8 @@
 	let groups = {};
 	let activeBrand = 'All';
 	let searchQuery = '';
+	let classSource = '';
+	let checkpointName = '';
 
 	function sneakersForActiveBrand() {
 		if (activeBrand === 'All') {
@@ -70,6 +72,9 @@
 			} else {
 				groups = {};
 			}
+
+			classSource = data.class_source || '';
+			checkpointName = data.checkpoint_name || '';
 		} catch (err) {
 			if (err && err.message) {
 				error = err.message;
@@ -100,6 +105,12 @@
 					Choose a brand family to narrow the matcher label space.
 				</p>
 			</div>
+			{#if classSource === 'checkpoint' && checkpointName}
+				<p class="route-subnote source-note">
+					These supported sneakers are taken from the currently loaded checkpoint:
+					<strong>{checkpointName}</strong>
+				</p>
+			{/if}
 			<div class="search-row">
 				<label class="search-field" for="supported-search">
 					<span>Search sneakers</span>
@@ -173,6 +184,15 @@
 		justify-content: space-between;
 		gap: 0.8rem 1.2rem;
 		margin-top: 1rem;
+	}
+
+	.source-note {
+		margin-top: 0.7rem;
+	}
+
+	.source-note strong {
+		color: var(--site-text-soft);
+		font-weight: 700;
 	}
 
 	.search-row {
