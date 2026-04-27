@@ -8,6 +8,7 @@ services:
       BACKEND_PORT: 8090
       RUNTIME_ASSETS_REPO_URL: ${RUNTIME_ASSETS_REPO_URL:-https://github.com/tomasfratrik/thesis-runtime-assets.git}
       MODEL_REPO_URL: ${MODEL_REPO_URL:-https://huggingface.co/tomasfratrik/thesis-model}
+      HF_TOKEN: ${HF_TOKEN:-}
     ports:
       - "8090:8090"
     volumes:

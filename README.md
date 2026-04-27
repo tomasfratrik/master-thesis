@@ -8,6 +8,11 @@ Install:
 - Docker
 - Docker Compose
 
+Optional for GPU inference:
+- NVIDIA GPU
+- NVIDIA drivers
+- NVIDIA Container Toolkit
+
 Check that they are available:
 
 ```bash
@@ -59,6 +64,54 @@ On first startup, the backend automatically downloads:
 - the model repository from `MODEL_REPO_URL`
 
 `SNEAKER_MODEL_CHECKPOINT` is resolved automatically from the downloaded model repository.
+
+If you use Hugging Face rate-limited downloads, set `HF_TOKEN` in `.env`.
+
+## Optional GPU Runtime
+
+The recommended default setup runs on CPU:
+
+```bash
+docker compose up --build
+```
+
+This works on any machine with Docker and does not require NVIDIA container support.
+
+GPU mode is optional and should only be used if the host machine is already configured for
+NVIDIA containers.
+
+If your host already has:
+- NVIDIA drivers
+- NVIDIA Container Toolkit
+
+first verify GPU access on the host:
+
+```bash
+nvidia-smi
+```
+
+then verify GPU access in Docker:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.3.2-base-ubuntu22.04 nvidia-smi
+```
+
+If the Docker test fails, configure the NVIDIA runtime on the host, for example:
+
+```bash
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+sudo systemctl restart docker
+```
+
+After Docker GPU access works, start the project in GPU mode:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+```
+
+This project does not install NVIDIA drivers or the NVIDIA container runtime for you.
+GPU support depends on the host machine setup.
 
 ## Docker Operations
 
