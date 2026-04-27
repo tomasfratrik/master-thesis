@@ -1,6 +1,5 @@
 <script>
 	import { onMount } from 'svelte';
-	import favicon from '$lib/assets/favicon.svg';
 	import Navbar from '$lib/components/Navbar.svelte';
 	import { loadAuth } from '$lib/stores/auth';
 	import '$lib/styles/app.css';
@@ -13,7 +12,8 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<!-- Logo adapted from https://similarpng.com/red-sneakers-outfit-men-on-transparent-background-png/ -->
+	<link rel="icon" href="/sneaker-logo.png" />
 </svelte:head>
 
 <div class="app-shell">

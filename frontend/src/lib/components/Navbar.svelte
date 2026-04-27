@@ -16,7 +16,8 @@
 
 <header class="site-nav">
 	<a class="brand" href="/">
-		<span class="brand-mark">SC</span>
+		<!-- Logo adapted from https://similarpng.com/red-sneakers-outfit-men-on-transparent-background-png/ -->
+		<img class="brand-logo" src="/sneaker-logo.png" alt="Sneaker Matcher logo" />
 		<div class="brand-copy">
 			<strong>Sneaker Matcher</strong>
 			<span>Visual matching workspace</span>
