@@ -1,6 +1,7 @@
 import io
 from pathlib import Path
 from typing import Any, Literal
+from typing import TypeVar
 from urllib.parse import quote
 
 import torch
@@ -31,6 +32,7 @@ def _preview_urls(class_name: str, limit: int = PREVIEW_LIMIT) -> list[str]:
 
 
 AggregationMode = Literal["embedding_mean", "logit_mean", "prob_mean"]
+T = TypeVar("T")
 
 
 class FineTunedSneakerClassifier:
@@ -87,7 +89,7 @@ class FineTunedSneakerClassifier:
         return aggregated / aggregated.norm(dim=-1, keepdim=True)
 
     @staticmethod
-    def _chunked[T](items: list[T], size: int) -> list[list[T]]:
+    def _chunked(items: list[T], size: int) -> list[list[T]]:
         return [items[index : index + size] for index in range(0, len(items), size)]
 
     @staticmethod

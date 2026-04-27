@@ -4,7 +4,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git libgomp1 \
+    && apt-get install -y --no-install-recommends git git-lfs libgomp1 \
+    && git lfs install --system \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -13,5 +14,6 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
+RUN chmod +x /app/scripts/bootstrap-and-run-backend.sh
 
-ENTRYPOINT ["uvicorn", "backend.app.api:app", "--host", "0.0.0.0", "--port", "8090"]
+ENTRYPOINT ["/app/scripts/bootstrap-and-run-backend.sh"]

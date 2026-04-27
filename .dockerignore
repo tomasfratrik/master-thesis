@@ -6,3 +6,6 @@ venv/
 sneakers-dataset/
 sneakers-dataset.tar
 artifacts/
+app_data/
+previews/
+.model-cache/

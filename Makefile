@@ -1,5 +1,5 @@
 
-.PHONY: install freeze run run-app-backend docker-build docker-predict eval-finetuned seed-previews
+.PHONY: install freeze run run-app-backend docker-build docker-predict docker-up eval-finetuned seed-previews
 
 run:
 	source venv/bin/activate
@@ -14,6 +14,7 @@ help:
 	@echo "  make install  - Install packages from requirements.txt"
 	@echo "  make run-app-backend - Run the catalog/backend API"
 	@echo "  make docker-build - Build prediction image"
+	@echo "  make docker-up - Start backend and frontend with Docker Compose"
 	@echo "  make docker-predict IMAGE=path/to/image.jpg - Run prediction in Docker"
 	@echo "  make eval-finetuned CHECKPOINT=... TEST_ROOT=... - Evaluate checkpoint on labeled test split"
 	@echo "  make seed-previews SOURCE_ROOT=... - Copy sample preview images per class"
@@ -30,6 +31,9 @@ run-app-backend:
 
 docker-build:
 	docker build -t sneaker-labeler:latest .
+
+docker-up:
+	docker compose up --build
 
 docker-predict:
 	docker run --rm -v $(PWD)/artifacts:/app/artifacts -v $(PWD):/workspace sneaker-labeler:latest --image /workspace/$(IMAGE)

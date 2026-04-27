@@ -22,6 +22,30 @@ npm install
 npm run dev
 ```
 
+## Docker Runtime
+
+Optionally copy `.env.example` to `.env` and adjust the asset URLs, then run:
+
+```bash
+docker compose up --build
+```
+
+Or:
+
+```bash
+make docker-up
+```
+
+This starts:
+- backend on `http://localhost:8090`
+- frontend on `http://localhost:4173`
+
+On first startup, the backend downloads:
+- runtime assets from `RUNTIME_ASSETS_REPO_URL`
+- the model checkpoint from `MODEL_REPO_URL`
+
+`SNEAKER_MODEL_CHECKPOINT` is resolved automatically from the downloaded model repo.
+
 ## Crop Demo Export
 
 To execute standalone sneaker crop export, run the following command:

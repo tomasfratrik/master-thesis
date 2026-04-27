@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: 8090
+      RUNTIME_ASSETS_REPO_URL: ${RUNTIME_ASSETS_REPO_URL:-https://github.com/tomasfratrik/thesis-runtime-assets.git}
+      MODEL_REPO_URL: ${MODEL_REPO_URL:-https://huggingface.co/tomasfratrik/thesis-model}
+    ports:
+      - "8090:8090"
+    volumes:
+      - app_data:/app/app_data
+      - artifacts:/app/artifacts
+      - previews:/app/previews
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      PUBLIC_API_BASE_URL: http://localhost:8090
+    depends_on:
+      - backend
+    ports:
+      - "4173:4173"
+
+volumes:
+  app_data:
+  artifacts:
+  previews:
