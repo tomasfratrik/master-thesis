@@ -1,6 +1,8 @@
 import base64
+import csv
 import json
 import mimetypes
+import io
 import uuid
 from pathlib import Path
 from typing import cast
@@ -8,7 +10,7 @@ from typing import Any, Literal
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import PREVIEWS_DIR, TEST_SPLIT_ROOT, TRAIN_SPLIT_ROOT, VAL_SPLIT_ROOT
@@ -168,6 +170,181 @@ def _serialize_item(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _serialize_catalog_product(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "catalog_id": row["catalog_id"],
+        "class_name": row["class_name"],
+        "display_name": row["display_name"],
+        "brand": row["brand"],
+        "model": row["model"],
+        "price_eur": row["price_eur"],
+        "last_updated": row["last_updated"],
+        "colorway": row["colorway"],
+        "sku": row["sku"],
+        "retail_price": row["retail_price"],
+        "currency": row["currency"],
+        "release_year": row["release_year"],
+        "release_date": row["release_date"],
+        "gender": row["gender"],
+        "category": row["category"],
+        "source": row["source"],
+        "source_url": row["source_url"],
+        "description": row["description"],
+        "metadata_json": row["metadata_json"],
+        "metadata": _parse_metadata_json(row["metadata_json"]),
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def _catalog_product_rows(
+    *,
+    search: str = "",
+    limit: int = 500,
+    checkpoint_only: bool = False,
+) -> list[dict[str, Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if search.strip():
+        query = f"%{search.strip().lower()}%"
+        clauses.append(
+            """
+            (
+                lower(class_name) LIKE ?
+                OR lower(display_name) LIKE ?
+                OR lower(coalesce(brand, '')) LIKE ?
+                OR lower(coalesce(model, '')) LIKE ?
+                OR lower(coalesce(colorway, '')) LIKE ?
+                OR lower(coalesce(sku, '')) LIKE ?
+            )
+            """
+        )
+        params.extend([query, query, query, query, query, query])
+
+    where_sql = ""
+    if clauses:
+        where_sql = "WHERE " + " AND ".join(clauses)
+
+    sql = f"""
+        SELECT
+            id,
+            catalog_id,
+            class_name,
+            display_name,
+            brand,
+            model,
+            price_eur,
+            last_updated,
+            colorway,
+            sku,
+            retail_price,
+            currency,
+            release_year,
+            release_date,
+            gender,
+            category,
+            source,
+            source_url,
+            description,
+            metadata_json,
+            created_at,
+            updated_at
+        FROM catalog_products
+        {where_sql}
+        ORDER BY
+            coalesce(brand, '') ASC,
+            display_name ASC,
+            class_name ASC
+    """
+
+    with get_connection() as connection:
+        rows = connection.execute(sql, tuple(params)).fetchall()
+
+    items = [_serialize_catalog_product(dict(row)) for row in rows]
+
+    if checkpoint_only and classifier is not None:
+        supported_keys = {
+            _supported_sneaker_key(class_name)
+            for class_name in classifier.class_names
+        }
+        items = [
+            item
+            for item in items
+            if _supported_sneaker_key(str(item.get("class_name") or "")) in supported_keys
+        ]
+
+    resolved_limit = max(1, min(int(limit), 5000))
+    return items[:resolved_limit]
+
+
+def _normalize_optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return text
+
+
+def _normalize_optional_float(value: Any) -> float | None:
+    text = _normalize_optional_text(value)
+    if text is None:
+        return None
+    return float(text)
+
+
+def _normalize_optional_int(value: Any) -> int | None:
+    text = _normalize_optional_text(value)
+    if text is None:
+        return None
+    return int(text)
+
+
+def _catalog_product_update_values(payload: dict[str, Any]) -> dict[str, Any]:
+    allowed_text_fields = {
+        "display_name",
+        "brand",
+        "model",
+        "last_updated",
+        "colorway",
+        "sku",
+        "currency",
+        "release_date",
+        "gender",
+        "category",
+        "source",
+        "source_url",
+        "description",
+        "metadata_json",
+    }
+    allowed_float_fields = {"price_eur", "retail_price"}
+    allowed_int_fields = {"release_year"}
+
+    updates: dict[str, Any] = {}
+    for field in allowed_text_fields:
+        if field in payload:
+            updates[field] = _normalize_optional_text(payload.get(field))
+    for field in allowed_float_fields:
+        if field in payload:
+            updates[field] = _normalize_optional_float(payload.get(field))
+    for field in allowed_int_fields:
+        if field in payload:
+            updates[field] = _normalize_optional_int(payload.get(field))
+
+    display_name = updates.get("display_name")
+    if "display_name" in updates and display_name is None:
+        raise HTTPException(status_code=400, detail="display_name cannot be empty.")
+
+    if "metadata_json" in updates and updates["metadata_json"] is not None:
+        try:
+            json.loads(updates["metadata_json"])
+        except json.JSONDecodeError as error:
+            raise HTTPException(status_code=400, detail=f"metadata_json is invalid JSON: {error.msg}") from error
+
+    return updates
+
+
 def _admin_user_counts() -> int:
     with get_connection() as connection:
         row = connection.execute(
@@ -185,6 +362,95 @@ def _prepared_image_payload(prepared: PreparedImage) -> dict[str, str]:
         "source": prepared.source,
         "data_url": f"data:{prepared.mime_type};base64,{encoded}",
     }
+
+
+def _parse_metadata_json(value: Any) -> dict[str, Any] | None:
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _catalog_product_metadata_by_supported_key() -> dict[str, dict[str, Any]]:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                id,
+                class_name,
+                display_name,
+                brand,
+                model,
+                price_eur,
+                last_updated,
+                colorway,
+                sku,
+                retail_price,
+                currency,
+                release_year,
+                release_date,
+                gender,
+                category,
+                source,
+                source_url,
+                description,
+                metadata_json
+            FROM catalog_products
+            """
+        ).fetchall()
+
+    product_map: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = _supported_sneaker_key(row["class_name"])
+        product_map[key] = {
+            "product_id": row["id"],
+            "class_name": row["class_name"],
+            "display_name": row["display_name"],
+            "brand": row["brand"],
+            "model": row["model"],
+            "price_eur": row["price_eur"],
+            "last_updated": row["last_updated"],
+            "colorway": row["colorway"],
+            "sku": row["sku"],
+            "retail_price": row["retail_price"],
+            "currency": row["currency"],
+            "release_year": row["release_year"],
+            "release_date": row["release_date"],
+            "gender": row["gender"],
+            "category": row["category"],
+            "source": row["source"],
+            "source_url": row["source_url"],
+            "description": row["description"],
+            "metadata": _parse_metadata_json(row["metadata_json"]),
+        }
+    return product_map
+
+
+def _attach_catalog_metadata_to_result(
+    result: dict[str, Any],
+    product_map: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    top_k = result.get("top_k")
+    if not isinstance(top_k, list):
+        return result
+
+    enriched_top_k: list[dict[str, Any]] = []
+    top_product: dict[str, Any] | None = None
+    for index, candidate in enumerate(top_k):
+        candidate_data = dict(candidate)
+        product = product_map.get(_supported_sneaker_key(str(candidate_data.get("class_name") or "")))
+        candidate_data["product"] = product
+        if index == 0:
+            top_product = product
+        enriched_top_k.append(candidate_data)
+
+    enriched = dict(result)
+    enriched["top_k"] = enriched_top_k
+    enriched["product"] = top_product
+    return enriched
 
 
 def _supported_sneaker_key(class_name: str) -> str:
@@ -261,12 +527,15 @@ def _prepare_prediction_payload(
     if not prepared_images:
         raise HTTPException(status_code=422, detail="Preprocess step produced no usable images.")
 
+    product_map = _catalog_product_metadata_by_supported_key()
+
     if mode == "grouped":
         result = classifier.predict_image_bytes_batch(
             [item.image_bytes for item in prepared_images],
             k=top_k,
             aggregation=aggregation,
         )
+        result = _attach_catalog_metadata_to_result(result, product_map)
         result["query_filenames"] = [filename for filename, _, _ in uploads]
         result["prepared_sources"] = [item.source for item in prepared_images]
         return {
@@ -287,6 +556,7 @@ def _prepare_prediction_payload(
             k=top_k,
             aggregation="embedding_mean",
         )
+        prediction = _attach_catalog_metadata_to_result(prediction, product_map)
         prediction["query_filename"] = prepared.input_filename
         prediction["processed_filename"] = prepared.original_filename
         prediction["prepared_source"] = prepared.source
@@ -543,6 +813,232 @@ async def admin_list_users(current_user: dict[str, Any] = Depends(require_admin)
                 }
                 for row in rows
             ]
+        }
+    )
+
+
+@app.get("/admin/catalog-products")
+async def admin_list_catalog_products(
+    search: str = Query(""),
+    limit: int = Query(200, ge=1, le=5000),
+    checkpoint_only: bool = Query(False),
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    items = _catalog_product_rows(search=search, limit=limit, checkpoint_only=checkpoint_only)
+    return JSONResponse(
+        {
+            "count": len(items),
+            "search": search,
+            "checkpoint_only": checkpoint_only,
+            "items": items,
+        }
+    )
+
+
+@app.patch("/admin/catalog-products/{product_id}")
+async def admin_update_catalog_product(
+    product_id: str,
+    payload: dict[str, Any],
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    updates = _catalog_product_update_values(payload)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No editable fields were provided.")
+
+    updates["updated_at"] = utc_now()
+    assignments = ", ".join(f"{field} = ?" for field in updates)
+    params = list(updates.values()) + [product_id]
+
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT id FROM catalog_products WHERE id = ?",
+            (product_id,),
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Catalog product not found.")
+
+        connection.execute(
+            f"UPDATE catalog_products SET {assignments} WHERE id = ?",
+            tuple(params),
+        )
+        updated = connection.execute(
+            """
+            SELECT
+                id,
+                catalog_id,
+                class_name,
+                display_name,
+                brand,
+                model,
+                price_eur,
+                last_updated,
+                colorway,
+                sku,
+                retail_price,
+                currency,
+                release_year,
+                release_date,
+                gender,
+                category,
+                source,
+                source_url,
+                description,
+                metadata_json,
+                created_at,
+                updated_at
+            FROM catalog_products
+            WHERE id = ?
+            """,
+            (product_id,),
+        ).fetchone()
+
+    return JSONResponse(_serialize_catalog_product(dict(updated)))
+
+
+@app.get("/admin/catalog-products/export")
+async def admin_export_catalog_products(
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> Response:
+    items = _catalog_product_rows(limit=5000)
+    fieldnames = [
+        "id",
+        "catalog_id",
+        "class_name",
+        "display_name",
+        "brand",
+        "model",
+        "price_eur",
+        "last_updated",
+        "colorway",
+        "sku",
+        "retail_price",
+        "currency",
+        "release_year",
+        "release_date",
+        "gender",
+        "category",
+        "source",
+        "source_url",
+        "description",
+        "metadata_json",
+        "created_at",
+        "updated_at",
+    ]
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+    writer.writeheader()
+    for item in items:
+        row = {field: item.get(field) for field in fieldnames}
+        writer.writerow(row)
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="catalog_products.csv"',
+        },
+    )
+
+
+@app.post("/admin/catalog-products/import")
+async def admin_import_catalog_products(
+    file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(require_admin),
+) -> JSONResponse:
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="CSV file is empty.")
+
+    try:
+        decoded = payload.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise HTTPException(status_code=400, detail="CSV file must be UTF-8 encoded.") from error
+
+    reader = csv.DictReader(io.StringIO(decoded))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV header is missing.")
+
+    updated_count = 0
+    skipped: list[dict[str, str]] = []
+
+    with get_connection() as connection:
+        existing_rows = connection.execute(
+            "SELECT id, class_name FROM catalog_products"
+        ).fetchall()
+        existing_by_normalized_class = {
+            _supported_sneaker_key(row["class_name"]): row["id"]
+            for row in existing_rows
+        }
+        for row_index, row in enumerate(reader, start=2):
+            product_id = _normalize_optional_text(row.get("id"))
+            class_name = _normalize_optional_text(row.get("class_name"))
+
+            existing = None
+            if product_id:
+                existing = connection.execute(
+                    "SELECT id FROM catalog_products WHERE id = ?",
+                    (product_id,),
+                ).fetchone()
+            if existing is None and class_name:
+                existing = connection.execute(
+                    "SELECT id FROM catalog_products WHERE class_name = ?",
+                    (class_name,),
+                ).fetchone()
+            if existing is None and class_name:
+                normalized_class_name = _supported_sneaker_key(class_name)
+                matched_id = existing_by_normalized_class.get(normalized_class_name)
+                if matched_id is not None:
+                    existing = {"id": matched_id}
+
+            if existing is None:
+                skipped.append(
+                    {
+                        "row": str(row_index),
+                        "reason": "No matching catalog product for id/class_name.",
+                    }
+                )
+                continue
+
+            try:
+                updates = _catalog_product_update_values(row)
+            except HTTPException as error:
+                skipped.append(
+                    {
+                        "row": str(row_index),
+                        "reason": str(error.detail),
+                    }
+                )
+                continue
+
+            updates.pop("id", None)
+            updates.pop("catalog_id", None)
+            updates.pop("class_name", None)
+            updates.pop("created_at", None)
+            updates.pop("updated_at", None)
+
+            if not updates:
+                skipped.append(
+                    {
+                        "row": str(row_index),
+                        "reason": "No editable values present.",
+                    }
+                )
+                continue
+
+            updates["updated_at"] = utc_now()
+            assignments = ", ".join(f"{field} = ?" for field in updates)
+            params = list(updates.values()) + [existing["id"]]
+            connection.execute(
+                f"UPDATE catalog_products SET {assignments} WHERE id = ?",
+                tuple(params),
+            )
+            updated_count += 1
+
+    return JSONResponse(
+        {
+            "updated": updated_count,
+            "skipped": skipped,
+            "filename": file.filename or "catalog_products.csv",
         }
     )
 

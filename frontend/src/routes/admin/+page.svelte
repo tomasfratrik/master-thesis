@@ -1,6 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
-	import AdminTrainingPanel from '$lib/components/AdminTrainingPanel.svelte';
+	import AdminCatalogPanel from '$lib/components/AdminCatalogPanel.svelte';
 	import { apiBaseUrl } from '$lib/config/env';
 	import { auth } from '$lib/stores/auth';
 
@@ -10,6 +10,7 @@
 	let activeAction = '';
 	let currentToken = null;
 	let currentUserId = null;
+	let activeTab = 'users';
 
 	function adminPageError(data, fallback) {
 		if (data && data.detail) {
@@ -165,16 +166,39 @@
 <section class="page-grid">
 	<section class="panel section-card">
 		<p class="eyebrow">Admin</p>
-		<h1>User management</h1>
-		<p class="route-note">
-			View accounts, promote or demote admins, and remove test users.
-		</p>
+		<h1>Administration</h1>
+
+		{#if !loading && !error}
+			<div class="admin-tabs" role="tablist" aria-label="Admin sections">
+				<button
+					type="button"
+					role="tab"
+					class:active={activeTab === 'users'}
+					class="admin-tab"
+					onclick={() => (activeTab = 'users')}
+				>
+					User Management
+				</button>
+				<button
+					type="button"
+					role="tab"
+					class:active={activeTab === 'catalog'}
+					class="admin-tab"
+					onclick={() => (activeTab = 'catalog')}
+				>
+					Catalog Metadata
+				</button>
+			</div>
+		{/if}
 
 		{#if loading}
 			<p class="route-note">Loading users...</p>
 		{:else if error}
 			<p class="route-note route-error">{error}</p>
-		{:else}
+		{:else if activeTab === 'users'}
+			<p class="route-note">
+				View accounts, promote or demote admins, and remove test users.
+			</p>
 			<div class="summary-row">
 				<div class="summary-card">
 					<span>Total users</span>
@@ -249,12 +273,10 @@
 					</article>
 				{/each}
 			</div>
+		{:else if activeTab === 'catalog'}
+			<AdminCatalogPanel token={currentToken} />
 		{/if}
 	</section>
-
-	{#if currentToken && !loading && !error}
-		<AdminTrainingPanel token={currentToken} />
-	{/if}
 </section>
 
 <style>
@@ -265,6 +287,33 @@
 
 	.route-error {
 		color: var(--color-error);
+	}
+
+	.admin-tabs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		margin-top: 1rem;
+	}
+
+	.admin-tab {
+		padding: 0.85rem 1rem;
+		border: 1px solid rgba(77, 58, 46, 0.14);
+		border-radius: 12px;
+		background: rgba(255, 252, 247, 0.84);
+		color: var(--site-text-soft);
+		font: inherit;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		cursor: pointer;
+		transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+	}
+
+	.admin-tab.active {
+		background: var(--site-selected);
+		color: var(--site-text);
+		box-shadow: inset 0 0 0 1px rgba(212, 87, 46, 0.18);
 	}
 
 	.summary-row {
