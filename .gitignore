@@ -219,7 +219,11 @@ __marimo__/
 # Artifacts
 artifacts/
 app_data/
+ooo
 
 # Codex
 AGENTS.md
 .codex
+
+# Other
+previews/
