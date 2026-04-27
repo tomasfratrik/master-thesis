@@ -245,7 +245,7 @@
 			return 'Hide top 5 results';
 		}
 
-		return 'Show top 5 results';
+		return 'Show top k results';
 	}
 
 	function previewToggleLabel(key) {

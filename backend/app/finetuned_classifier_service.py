@@ -33,6 +33,7 @@ def _preview_urls(class_name: str, limit: int = PREVIEW_LIMIT) -> list[str]:
 
 AggregationMode = Literal["embedding_mean", "logit_mean", "prob_mean"]
 T = TypeVar("T")
+MIN_VISIBLE_SCORE = 0.0005
 
 
 class FineTunedSneakerClassifier:
@@ -214,14 +215,32 @@ class FineTunedSneakerClassifier:
         top_k: list[dict[str, Any]] = []
         for score, index in zip(top_scores.tolist(), top_indices.tolist()):
             candidate = candidate_metadata[index]
+            score_value = float(score)
+            if score_value < MIN_VISIBLE_SCORE:
+                continue
             top_k.append(
                 {
                     "class_name": candidate["class_name"],
                     "label": candidate["label"],
                     "prompt": candidate["prompt"],
-                    "score": float(score),
+                    "score": score_value,
                     "preview_urls": candidate["preview_urls"],
                     "candidate_type": candidate["candidate_type"],
+                }
+            )
+
+        if not top_k:
+            fallback_index = int(top_indices[0].item())
+            fallback_candidate = candidate_metadata[fallback_index]
+            fallback_score = float(top_scores[0].item())
+            top_k.append(
+                {
+                    "class_name": fallback_candidate["class_name"],
+                    "label": fallback_candidate["label"],
+                    "prompt": fallback_candidate["prompt"],
+                    "score": fallback_score,
+                    "preview_urls": fallback_candidate["preview_urls"],
+                    "candidate_type": fallback_candidate["candidate_type"],
                 }
             )
 
