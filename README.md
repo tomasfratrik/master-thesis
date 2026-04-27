@@ -8,6 +8,11 @@ Install:
 - Docker
 - Docker Compose
 
+Optional for GPU inference:
+- NVIDIA GPU
+- NVIDIA drivers
+- NVIDIA Container Toolkit
+
 Check that they are available:
 
 ```bash
@@ -59,6 +64,24 @@ On first startup, the backend automatically downloads:
 - the model repository from `MODEL_REPO_URL`
 
 `SNEAKER_MODEL_CHECKPOINT` is resolved automatically from the downloaded model repository.
+
+If you use Hugging Face rate-limited downloads, set `HF_TOKEN` in `.env`.
+
+## Optional GPU Runtime
+
+The default Docker setup runs on CPU and works without NVIDIA container support.
+
+If your host already has:
+- NVIDIA drivers
+- NVIDIA Container Toolkit
+
+you can enable GPU with:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+```
+
+This project does not install NVIDIA drivers for you. GPU support depends on the host machine setup.
 
 ## Docker Operations
 
