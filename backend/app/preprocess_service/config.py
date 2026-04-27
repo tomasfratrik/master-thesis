@@ -32,7 +32,7 @@ class ResizeLimitRuntimeConfig(BaseModel):
 
 
 class GrayscaleConfig(BaseModel):
-    enabled: bool = False
+    enabled: bool = True
     keep_rgb_output: bool = True
 
 
