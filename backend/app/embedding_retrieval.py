@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""
+Catalog embedding retrieval for classifier-compatible sneaker search.
+
+Builds a searchable embedding index and returns class-level ranked matches.
+"""
+
 import io
 from collections import OrderedDict
 from typing import Any
@@ -33,6 +39,7 @@ class CatalogEmbeddingRetrieval:
 
     @staticmethod
     def _normalize_feature(feature: Any, device: torch.device) -> torch.Tensor:
+        """Convert a stored embedding into a normalized device tensor."""
         if not torch.is_tensor(feature):
             feature = torch.tensor(feature, dtype=torch.float32)
         feature = feature.to(device).float()
@@ -41,6 +48,7 @@ class CatalogEmbeddingRetrieval:
         return feature / feature.norm(dim=-1, keepdim=True)
 
     def _group_rows(self, entries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], torch.Tensor]:
+        """Group embedding rows by class while keeping per-row retrieval data."""
         normalized_rows: list[dict[str, Any]] = []
         feature_rows: list[torch.Tensor] = []
 
@@ -104,6 +112,7 @@ class CatalogEmbeddingRetrieval:
         return normalized_rows, feature_matrix
 
     def refresh(self) -> int:
+        """Reload catalog embedding entries from disk and the database."""
         image_entries = load_catalog_image_embedding_entries()
         if image_entries:
             self.entry_mode = "image"
@@ -131,6 +140,7 @@ class CatalogEmbeddingRetrieval:
         self,
         extra_entries: list[dict[str, Any]] | None = None,
     ) -> tuple[torch.Tensor, list[dict[str, Any]]]:
+        """Assemble retrieval candidates from catalog rows and optional extras."""
         metadata = list(self.class_groups)
         if self.feature_matrix.numel() == 0:
             features: list[torch.Tensor] = []
@@ -171,6 +181,7 @@ class CatalogEmbeddingRetrieval:
         return self.classifier.build_prototype_from_images(images).to(self.device)
 
     def _aggregate_class_score(self, row_scores: torch.Tensor) -> torch.Tensor:
+        """Reduce per-image scores into one score for a class."""
         if self.class_aggregation == "max":
             return row_scores.max()
         top_n = min(self.top_n_per_class, int(row_scores.shape[0]))
@@ -187,6 +198,7 @@ class CatalogEmbeddingRetrieval:
         k: int,
         query_image_count: int,
     ) -> dict[str, Any]:
+        """Convert retrieval scores into the public ranked response payload."""
         k = max(1, min(int(k), len(candidate_metadata)))
         probabilities = class_scores.softmax(dim=-1)
         top_scores, top_indices = probabilities.topk(k)
@@ -230,6 +242,7 @@ class CatalogEmbeddingRetrieval:
         k: int = 5,
         extra_entries: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        """Search the catalog with one or more query images."""
         candidate_features, candidate_metadata = self._candidate_space(extra_entries)
         query_feature = self._query_feature(images)
         row_scores = (100.0 * query_feature @ candidate_features.T).squeeze(0)

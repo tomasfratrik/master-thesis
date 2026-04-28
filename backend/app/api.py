@@ -1,3 +1,9 @@
+"""
+FastAPI endpoints and response shaping for the sneaker matcher backend.
+
+Includes authentication, analysis, catalog, and admin routes.
+"""
+
 import base64
 import csv
 import json
@@ -78,6 +84,7 @@ else:
 
 
 def _reload_classifier(checkpoint_path: str) -> None:
+    """Reload the active classifier and rebuild the retrieval index."""
     global classifier, classifier_error, retrieval_index
     classifier = FineTunedSneakerClassifier(checkpoint_path=Path(checkpoint_path))
     print("[startup] Refreshing retrieval catalog embeddings after classifier reload...", flush=True)
@@ -92,6 +99,7 @@ def _reload_classifier(checkpoint_path: str) -> None:
 
 
 def _refresh_retrieval_index() -> None:
+    """Rebuild retrieval embeddings and refresh the in-memory index."""
     global retrieval_index
     if classifier is None:
         retrieval_index = None
@@ -204,6 +212,7 @@ def _catalog_product_rows(
     limit: int = 500,
     checkpoint_only: bool = False,
 ) -> list[dict[str, Any]]:
+    """Return catalog product rows for the admin catalog editor."""
     clauses: list[str] = []
     params: list[Any] = []
     if search.strip():
@@ -302,6 +311,7 @@ def _normalize_optional_int(value: Any) -> int | None:
 
 
 def _catalog_product_update_values(payload: dict[str, Any]) -> dict[str, Any]:
+    """Normalize and validate editable catalog product fields."""
     allowed_text_fields = {
         "display_name",
         "brand",
@@ -354,6 +364,7 @@ def _admin_user_counts() -> int:
 
 
 def _prepared_image_payload(prepared: PreparedImage) -> dict[str, str]:
+    """Serialize a prepared image into the API response payload."""
     encoded = base64.b64encode(prepared.image_bytes).decode("ascii")
     return {
         "input_filename": prepared.input_filename,
@@ -365,6 +376,7 @@ def _prepared_image_payload(prepared: PreparedImage) -> dict[str, str]:
 
 
 def _parse_metadata_json(value: Any) -> dict[str, Any] | None:
+    """Parse product metadata JSON when it contains an object payload."""
     if not value:
         return None
     try:
@@ -375,6 +387,7 @@ def _parse_metadata_json(value: Any) -> dict[str, Any] | None:
 
 
 def _catalog_product_metadata_by_supported_key() -> dict[str, dict[str, Any]]:
+    """Index catalog product metadata by normalized supported-sneaker key."""
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -433,6 +446,7 @@ def _attach_catalog_metadata_to_result(
     result: dict[str, Any],
     product_map: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
+    """Attach catalog product metadata to each ranked prediction candidate."""
     top_k = result.get("top_k")
     if not isinstance(top_k, list):
         return result
@@ -454,6 +468,7 @@ def _attach_catalog_metadata_to_result(
 
 
 def _supported_sneaker_key(class_name: str) -> str:
+    """Normalize a class name into a stable supported-sneaker lookup key."""
     normalized = class_name.strip().replace("-", "_")
     normalized = "_".join(part for part in normalized.split("_") if part)
     lower = normalized.lower()
@@ -463,6 +478,7 @@ def _supported_sneaker_key(class_name: str) -> str:
 
 
 def _supported_sneaker_brand(class_name: str, fallback_brand: str | None = None) -> str:
+    """Infer the brand label used by the supported-sneakers view."""
     normalized = _supported_sneaker_key(class_name)
     if normalized.startswith("air_jordan_"):
         return "Nike"
@@ -470,6 +486,7 @@ def _supported_sneaker_brand(class_name: str, fallback_brand: str | None = None)
 
 
 def _supported_sneaker_label(class_name: str, fallback_label: str | None = None) -> str:
+    """Build the display label used by the supported-sneakers view."""
     if fallback_label and _supported_sneaker_key(class_name).startswith("air_jordan_"):
         if fallback_label.startswith("Nike "):
             return fallback_label
@@ -480,6 +497,7 @@ def _supported_sneaker_label(class_name: str, fallback_label: str | None = None)
 
 
 async def _read_uploads(files: list[UploadFile]) -> list[tuple[str, bytes, str]]:
+    """Read uploaded files into in-memory payload tuples."""
     uploads: list[tuple[str, bytes, str]] = []
     for file in files:
         payload = await file.read()
@@ -512,6 +530,7 @@ def _prepare_prediction_payload(
     prepared_images: list[PreparedImage] | None = None,
     warnings: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
+    """Build the classifier response payload for grouped or per-image analysis."""
     if classifier is None:
         raise HTTPException(status_code=503, detail=f"Predictor unavailable: {classifier_error}")
     if not uploads:
@@ -581,6 +600,7 @@ def _prepare_retrieval_payload(
     prepared_images: list[PreparedImage] | None = None,
     warnings: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
+    """Build the embedding-retrieval response payload for uploaded images."""
     if classifier is None or retrieval_index is None:
         raise HTTPException(status_code=503, detail=f"Retrieval index unavailable: {classifier_error}")
     if not uploads:

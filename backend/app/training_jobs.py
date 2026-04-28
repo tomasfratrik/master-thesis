@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""
+Training job persistence and execution helpers for admin fine-tuning workflows.
+
+Builds job datasets, runs training/evaluation commands, and tracks acceptance state.
+"""
+
 import json
 import os
 import shutil
@@ -58,6 +64,7 @@ def _job_eval_report_path(job_id: str) -> Path:
 
 
 def get_active_checkpoint_path() -> str | None:
+    """Return the checkpoint currently marked as active for inference."""
     with get_connection() as connection:
         row = connection.execute(
             "SELECT value FROM app_settings WHERE key = ?",
@@ -81,6 +88,7 @@ def set_active_checkpoint_path(path: str) -> None:
 
 
 def initialize_training_jobs() -> None:
+    """Restore checkpoint settings and fail interrupted jobs on startup."""
     active_checkpoint = get_active_checkpoint_path()
     if active_checkpoint:
         set_active_checkpoint_path(active_checkpoint)
@@ -100,6 +108,7 @@ def initialize_training_jobs() -> None:
 
 
 def ensure_reference_catalog() -> str:
+    """Create or return the system-owned reference catalog."""
     with get_connection() as connection:
         row = connection.execute(
             "SELECT id FROM users WHERE email = ?",
@@ -178,6 +187,7 @@ def create_training_job(
     required_topk_accuracy: float = 0.90,
     required_new_class_topk_accuracy: float = 0.90,
 ) -> str:
+    """Create a new admin training job and persist its uploaded files."""
     if not train_uploads:
         raise ValueError("At least one training image is required.")
     if not test_uploads:
@@ -303,6 +313,7 @@ def get_training_job(job_id: str) -> dict[str, Any] | None:
 
 
 def _update_job(job_id: str, **fields: Any) -> None:
+    """Apply partial field updates to a stored training job."""
     if not fields:
         return
     fields["updated_at"] = utc_now()
@@ -326,6 +337,7 @@ def _safe_symlink(source: Path, destination: Path) -> None:
 
 
 def _mirror_split_root(source_root: Path | None, destination_root: Path) -> None:
+    """Mirror an existing dataset split into a job dataset workspace."""
     if source_root is None or not source_root.exists():
         return
 
@@ -363,6 +375,7 @@ def _build_dataset_for_job(
     val_root: Path | None,
     test_root: Path,
 ) -> Path:
+    """Build the merged dataset tree used for one training job run."""
     dataset_root = _job_dataset_root(job_id)
     if dataset_root.exists():
         shutil.rmtree(dataset_root)
@@ -387,6 +400,7 @@ def _run_command_stream(
     env: dict[str, str],
     cwd: Path,
 ) -> int:
+    """Run a subprocess and append its combined output to the job log."""
     _append_job_log(job_id, f"$ {' '.join(command)}")
     process = subprocess.Popen(
         command,
@@ -408,6 +422,7 @@ def _run_command_stream(
 
 
 def _evaluate_job_gates(job: dict[str, Any], report: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    """Evaluate whether a completed job satisfies the acceptance gates."""
     summary = report.get("summary", {})
     per_class = report.get("per_class", {})
     class_summary = per_class.get(job["class_name"], {})
@@ -431,6 +446,7 @@ def _evaluate_job_gates(job: dict[str, Any], report: dict[str, Any]) -> tuple[bo
 
 
 def _append_job_log(job_id: str, text: str) -> None:
+    """Append one line of text to the persisted job log buffer."""
     if not text:
         return
     with get_connection() as connection:
@@ -455,6 +471,7 @@ def _run_training_job(
     val_root: Path | None,
     test_root: Path,
 ) -> None:
+    """Execute the full train-and-evaluate lifecycle for one job."""
     job = get_training_job(job_id)
     if job is None:
         return
@@ -559,6 +576,7 @@ def start_training_job(
     val_root: Path | None,
     test_root: Path,
 ) -> None:
+    """Queue a background thread to run the requested training job."""
     job = get_training_job(job_id)
     if job is None:
         raise ValueError("Training job not found.")
@@ -604,6 +622,7 @@ def start_training_job(
 
 
 def accept_training_job(job_id: str) -> dict[str, Any]:
+    """Accept a completed training job and promote its checkpoint/assets."""
     job = get_training_job(job_id)
     if job is None:
         raise ValueError("Training job not found.")

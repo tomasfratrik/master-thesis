@@ -1,3 +1,9 @@
+"""
+Sneaker classifier inference service.
+
+Loads the fine-tuned checkpoint, prepares prompts, and returns ranked predictions.
+"""
+
 import io
 from pathlib import Path
 from typing import Any, Literal
@@ -17,6 +23,7 @@ def _format_class_name(class_name: str) -> str:
 
 
 def _preview_urls(class_name: str, limit: int = PREVIEW_LIMIT) -> list[str]:
+    """Return preview image URLs for a sneaker class."""
     preview_dir = PREVIEWS_DIR / class_name
     if not preview_dir.exists():
         return []
@@ -71,6 +78,7 @@ class FineTunedSneakerClassifier:
 
     @torch.no_grad()
     def _encode_images(self, images: list[Image.Image]) -> torch.Tensor:
+        """Encode input images into normalized visual feature vectors."""
         if not images:
             raise ValueError("At least one image is required for prediction.")
 
@@ -91,10 +99,12 @@ class FineTunedSneakerClassifier:
 
     @staticmethod
     def _chunked(items: list[T], size: int) -> list[list[T]]:
+        """Split a list into fixed-size chunks."""
         return [items[index : index + size] for index in range(0, len(items), size)]
 
     @staticmethod
     def _validate_aggregation(aggregation: str) -> AggregationMode:
+        """Validate the configured prediction aggregation mode."""
         valid = {"embedding_mean", "logit_mean", "prob_mean"}
         if aggregation not in valid:
             raise ValueError(
@@ -107,6 +117,7 @@ class FineTunedSneakerClassifier:
         return 100.0 * image_features @ self.text_features.T
 
     def set_extra_prototypes(self, items: list[dict[str, Any]]) -> None:
+        """Register additional prototype vectors alongside checkpoint classes."""
         normalized: list[dict[str, Any]] = []
         for item in items:
             feature = item["feature"]
@@ -128,6 +139,7 @@ class FineTunedSneakerClassifier:
         self.extra_prototypes = normalized
 
     def build_prototype_from_images(self, images: list[Image.Image]) -> torch.Tensor:
+        """Build one normalized prototype vector from several images."""
         if not images:
             raise ValueError("At least one image is required to build a prototype.")
 
@@ -161,6 +173,7 @@ class FineTunedSneakerClassifier:
         self,
         extra_prototypes: list[dict[str, Any]] | None = None,
     ) -> tuple[torch.Tensor, list[dict[str, Any]]]:
+        """Assemble the feature matrix and metadata for ranked candidates."""
         metadata = [
             {
                 "class_name": class_name,
@@ -209,6 +222,7 @@ class FineTunedSneakerClassifier:
         query_image_count: int,
         aggregation: AggregationMode,
     ) -> dict[str, Any]:
+        """Convert ranked probabilities into the public prediction payload."""
         k = max(1, min(int(k), len(candidate_metadata)))
         top_scores, top_indices = probabilities.topk(k)
 
@@ -264,6 +278,7 @@ class FineTunedSneakerClassifier:
         aggregation: AggregationMode = "embedding_mean",
         extra_prototypes: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        """Predict sneaker classes for one or more views of the same item."""
         aggregation = self._validate_aggregation(aggregation)
         image_features = self._encode_images(images)
         candidate_features, candidate_metadata = self._candidate_space(extra_prototypes)

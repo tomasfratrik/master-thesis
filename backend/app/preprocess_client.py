@@ -1,3 +1,5 @@
+"""Upload preprocessing helpers used by analysis requests."""
+
 import io
 from dataclasses import dataclass
 from typing import Any
@@ -27,6 +29,7 @@ pipeline = PreprocessPipeline()
 
 
 def _image_to_bytes(image: Any, image_format: str) -> bytes:
+    """Encode a PIL image back into bytes for downstream analysis."""
     working = image.convert("RGB")
     buffer = io.BytesIO()
     save_kwargs: dict[str, Any] = {"format": image_format}
@@ -39,6 +42,7 @@ def _image_to_bytes(image: Any, image_format: str) -> bytes:
 def prepare_uploads_without_preprocess(
     uploads: list[tuple[str, bytes, str]],
 ) -> PreprocessOutcome:
+    """Wrap raw uploads in the prepared-image structure without preprocessing."""
     images = [
         PreparedImage(
             input_filename=filename,
@@ -65,6 +69,7 @@ def prepare_uploads_without_preprocess(
 def preprocess_uploads(
     uploads: list[tuple[str, bytes, str]],
 ) -> PreprocessOutcome:
+    """Run the preprocessing pipeline and collect warning metadata."""
     if not uploads:
         return PreprocessOutcome(images=[], warnings=[])
 

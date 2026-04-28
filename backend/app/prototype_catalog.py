@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+"""
+Catalog prototype and embedding helpers for retrieval and admin tooling.
+
+Loads saved prototypes, precomputed embeddings, and preview-backed fallback data.
+"""
+
 import json
 import shutil
 import uuid
@@ -34,6 +40,7 @@ def _store_product_file(product_id: str, role: str, filename: str, payload: byte
 
 
 def save_preview_assets(class_name: str, preview_uploads: list[tuple[str, bytes, str]]) -> None:
+    """Replace saved preview images for a sneaker class."""
     preview_dir = PREVIEWS_DIR / class_name
     preview_dir.mkdir(parents=True, exist_ok=True)
     for existing in preview_dir.iterdir():
@@ -74,6 +81,7 @@ def _preview_images(class_name: str) -> list[Image.Image]:
 
 
 def _normalize_lookup_key(value: str) -> str:
+    """Normalize class-like strings for tolerant cross-source lookup."""
     return "".join(character.lower() for character in value if character.isalnum())
 
 
@@ -96,6 +104,7 @@ def upsert_prototype_class(
     preview_uploads: list[tuple[str, bytes, str]],
     evaluation_summary: dict[str, Any] | None = None,
 ) -> str:
+    """Create or update a prototype-backed catalog product entry."""
     catalog_id = ensure_reference_catalog()
     now = utc_now()
     metadata_json = json.dumps(
@@ -204,6 +213,7 @@ def upsert_prototype_class(
 
 
 def ensure_catalog_embeddings(classifier: Any) -> int:
+    """Ensure every catalog class has a usable retrieval prototype embedding."""
     if PRECOMPUTED_IMAGE_EMBEDDINGS is not None and PRECOMPUTED_IMAGE_METADATA is not None:
         print(
             f"[retrieval] Using precomputed image embeddings from {PRECOMPUTED_IMAGE_EMBEDDINGS.name} "
@@ -302,6 +312,7 @@ def ensure_catalog_embeddings(classifier: Any) -> int:
 
 
 def load_classifier_prototypes() -> list[dict[str, Any]]:
+    """Load saved prototype vectors for classifier-side prototype injection."""
     with get_connection() as connection:
         rows = connection.execute(
             """
@@ -351,6 +362,7 @@ def _catalog_product_map() -> dict[str, dict[str, Any]]:
 
 
 def _catalog_class_alias_map(product_map: dict[str, dict[str, Any]]) -> dict[str, str]:
+    """Build alternate class-name mappings from catalog rows and preview folders."""
     aliases = {_normalize_lookup_key(class_name): class_name for class_name in product_map}
     if PREVIEWS_DIR.exists():
         for path in PREVIEWS_DIR.iterdir():
@@ -370,6 +382,7 @@ def _resolve_catalog_class_name(
 
 
 def _metadata_class_name(meta: dict[str, Any], *, context: str) -> str:
+    """Extract a class name from embedding metadata with context-aware errors."""
     raw_class_name = meta.get("class_name")
     if not raw_class_name:
         raw_class_name = meta.get("class")
@@ -411,6 +424,7 @@ def _metadata_source_path(meta: dict[str, Any]) -> str | None:
 
 
 def _load_precomputed_embedding_entries() -> list[dict[str, Any]]:
+    """Load class-level retrieval entries from precomputed embedding assets."""
     if PRECOMPUTED_CLASS_EMBEDDINGS is None or PRECOMPUTED_CLASS_METADATA is None:
         return []
 
@@ -446,6 +460,7 @@ def _load_precomputed_embedding_entries() -> list[dict[str, Any]]:
 
 
 def _load_precomputed_image_entries() -> list[dict[str, Any]]:
+    """Load image-level retrieval entries from precomputed embedding assets."""
     if PRECOMPUTED_IMAGE_EMBEDDINGS is None or PRECOMPUTED_IMAGE_METADATA is None:
         return []
 
@@ -483,6 +498,7 @@ def _load_precomputed_image_entries() -> list[dict[str, Any]]:
 
 
 def _load_saved_prototype_entries(exclude_class_names: set[str] | None = None) -> list[dict[str, Any]]:
+    """Load database-backed prototype entries not replaced by precomputed assets."""
     exclude_class_names = exclude_class_names or set()
     with get_connection() as connection:
         rows = connection.execute(
@@ -522,10 +538,12 @@ def _load_saved_prototype_entries(exclude_class_names: set[str] | None = None) -
 
 
 def load_catalog_embedding_entries() -> list[dict[str, Any]]:
+    """Return the merged class-level catalog embedding entries."""
     precomputed_entries = _load_precomputed_embedding_entries()
     seen = {entry["class_name"] for entry in precomputed_entries}
     return precomputed_entries + _load_saved_prototype_entries(seen)
 
 
 def load_catalog_image_embedding_entries() -> list[dict[str, Any]]:
+    """Return image-level catalog embedding entries when available."""
     return _load_precomputed_image_entries()

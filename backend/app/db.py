@@ -1,3 +1,5 @@
+"""SQLite schema initialization and connection helpers for the backend."""
+
 import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -23,6 +25,7 @@ def _ensure_column(
     column_name: str,
     column_definition: str,
 ) -> None:
+    """Add a column to an existing table when it is missing."""
     if column_name in _table_columns(connection, table_name):
         return
     connection.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_definition}")
@@ -50,6 +53,7 @@ def _unique_username(connection: sqlite3.Connection, preferred: str, user_id: st
 
 
 def _ensure_user_profile_columns(connection: sqlite3.Connection) -> None:
+    """Backfill username, full name, and role fields for existing users."""
     _ensure_column(
         connection,
         table_name="users",
@@ -92,6 +96,7 @@ def _ensure_user_profile_columns(connection: sqlite3.Connection) -> None:
 
 
 def init_db(db_path: Path = DB_PATH) -> None:
+    """Create the application schema and apply lightweight migrations."""
     with sqlite3.connect(db_path) as connection:
         connection.executescript(
             """
@@ -322,6 +327,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
 
 @contextmanager
 def get_connection(db_path: Path = DB_PATH) -> Iterator[sqlite3.Connection]:
+    """Yield a SQLite connection with row access and automatic commit."""
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON;")

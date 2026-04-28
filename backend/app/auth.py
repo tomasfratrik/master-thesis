@@ -1,3 +1,5 @@
+"""Authentication helpers for local users, sessions, and admin access."""
+
 import hashlib
 import hmac
 import secrets
@@ -23,6 +25,7 @@ def hash_password(password: str, salt: str) -> str:
 
 
 def normalize_username(username: str) -> str:
+    """Normalize user input into the allowed username format."""
     normalized = "".join(character for character in username.strip().lower() if character.isalnum() or character in {"_", "-", "."})
     if not normalized:
         raise HTTPException(status_code=400, detail="Username is required.")
@@ -80,6 +83,7 @@ def create_user(
 
 
 def authenticate_user(username: str, password: str) -> dict[str, Any] | None:
+    """Validate user credentials and return the public user payload."""
     username = normalize_username(username)
     with get_connection() as connection:
         row = connection.execute(
@@ -98,6 +102,7 @@ def authenticate_user(username: str, password: str) -> dict[str, Any] | None:
 
 
 def ensure_demo_users() -> None:
+    """Ensure the default demo user and admin accounts exist."""
     defaults = (
         {
             "username": "user",
@@ -168,6 +173,7 @@ def create_session(user_id: str) -> str:
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict[str, Any]:
+    """Resolve the current authenticated user from the session token."""
     with get_connection() as connection:
         row = connection.execute(
             """
@@ -186,6 +192,7 @@ def get_current_user(
 
 
 def require_admin(current_user: dict[str, Any] = Depends(get_current_user)) -> dict[str, Any]:
+    """Reject requests from authenticated non-admin users."""
     if current_user["role"] != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
     return current_user

@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+"""Sneaker catalog metadata helpers for labels, brands, and class names."""
+
 import re
 
 
@@ -18,6 +21,7 @@ def is_model_like_token(token: str) -> bool:
 
 
 def build_brand_prefix_map(class_names: list[str]) -> dict[str, str]:
+    """Infer brand labels from checkpoint or catalog class names."""
     tokenized = {class_name: tokenize_class_name(class_name) for class_name in class_names}
     prefix_counts: dict[tuple[str, ...], int] = {}
     next_token_sets: dict[tuple[str, ...], set[str]] = {}
@@ -74,6 +78,7 @@ def infer_model_name(class_name: str, brand: str) -> str:
 
 
 def normalize_class_name(value: str) -> str:
+    """Normalize arbitrary text into the stored catalog class-name format."""
     normalized = re.sub(r"[^A-Za-z0-9]+", "_", value.strip())
     normalized = re.sub(r"_+", "_", normalized).strip("_")
     if not normalized:
