@@ -6,21 +6,6 @@
 		{ value: 'embedding_mean', label: 'Embedding mean', note: 'Average image embeddings before classification.' },
 		{ value: 'prob_mean', label: 'Probability mean', note: 'Average per-image class probabilities.' }
 	];
-	const analysisMethodOptions = [
-		{
-			value: 'classifier',
-			label: 'Classifier',
-			note: 'Existing prompt-based fine-grained label prediction.'
-		},
-		{
-			value: 'retrieval',
-			label: 'Embeddings',
-			note: 'Compare the query against stored sneaker catalog embeddings.'
-		}
-	];
-	const signalTags = ['visual search', 'embedding retrieval', 'prototype classes', 'clip', 'ranking'];
-
-	let analysisMethod = 'classifier';
 	let mode = 'grouped';
 	let aggregation = 'logit_mean';
 	let selectedFiles = [];
@@ -200,14 +185,6 @@
 		return warning.message;
 	}
 
-	function analysisMethodLabel() {
-		if (analysisMethod === 'retrieval') {
-			return 'Embeddings';
-		}
-
-		return 'Classifier';
-	}
-
 	function modeLabel() {
 		if (mode === 'grouped') {
 			return 'One Sneaker';
@@ -217,10 +194,6 @@
 	}
 
 	function loadingMessage() {
-		if (analysisMethod === 'retrieval') {
-			return 'Preprocessing images and comparing against catalog embeddings.';
-		}
-
 		return 'Preprocessing images and running prediction.';
 	}
 
@@ -233,10 +206,6 @@
 	}
 
 	function resultMethodLabel() {
-		if (response?.analysis_method === 'retrieval') {
-			return 'embeddings';
-		}
-
 		return 'classifier';
 	}
 
@@ -317,15 +286,10 @@
 				mode,
 				top_k: '5'
 			});
-			if (mode === 'grouped' && analysisMethod === 'classifier') {
+			if (mode === 'grouped') {
 				params.set('aggregation', aggregation);
 			}
-
-			let endpoint = '/analyze';
-			if (analysisMethod === 'retrieval') {
-				endpoint = '/analyze-retrieval';
-			}
-			const res = await fetch(`${apiBaseUrl}${endpoint}?${params.toString()}`, {
+			const res = await fetch(`${apiBaseUrl}/analyze?${params.toString()}`, {
 				method: 'POST',
 				body: formData
 			});
@@ -357,23 +321,6 @@
 <section class="page-grid">
 	<div class="hero-grid analyze-grid">
 		<section class="panel hero-copy">
-			<div class="aggregation-block">
-				<p class="eyebrow">Matching Method</p>
-				<div class="aggregation-grid">
-					{#each analysisMethodOptions as option}
-						<button
-							type="button"
-							class:active={analysisMethod === option.value}
-							class="aggregation-card"
-							onclick={() => (analysisMethod = option.value)}
-						>
-							<strong>{option.label}</strong>
-							<span>{option.note}</span>
-						</button>
-					{/each}
-				</div>
-			</div>
-
 			<div class="mode-tabs" role="tablist" aria-label="Analysis mode">
 				<button
 					type="button"
@@ -441,7 +388,7 @@
 				</div>
 			{/if}
 
-			{#if mode === 'grouped' && analysisMethod === 'classifier'}
+			{#if mode === 'grouped'}
 				<div class="aggregation-block">
 					<p class="eyebrow">Aggregation</p>
 					<div class="aggregation-grid">
@@ -483,7 +430,7 @@
 			<div class="summary-stack">
 				<div class="summary-line">
 					<span>Method</span>
-					<strong>{analysisMethodLabel()}</strong>
+					<strong>Classifier</strong>
 				</div>
 				<div class="summary-line">
 					<span>Mode</span>
@@ -493,7 +440,7 @@
 					<span>Files selected</span>
 					<strong>{selectedFiles.length}</strong>
 				</div>
-				{#if mode === 'grouped' && analysisMethod === 'classifier'}
+				{#if mode === 'grouped'}
 					<div class="summary-line">
 						<span>Aggregation</span>
 						<strong>{aggregation.replace('_', ' ')}</strong>
