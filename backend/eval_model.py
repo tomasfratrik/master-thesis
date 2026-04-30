@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypeVar
 
 import torch
 from PIL import Image
@@ -10,6 +11,7 @@ from backend.model_loader import VisionLanguageEncoder, load_encoder
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+T = TypeVar("T")
 
 
 def format_class_label(class_name: str) -> str:
@@ -66,7 +68,7 @@ class EvaluationImageEncoder:
         self.pretrained = getattr(self.encoder, "pretrained", pretrained)
 
     @staticmethod
-    def _chunked[T](items: list[T], size: int) -> list[list[T]]:
+    def _chunked(items: list[T], size: int) -> list[list[T]]:
         return [items[index : index + size] for index in range(0, len(items), size)]
 
     @torch.no_grad()
@@ -146,6 +148,11 @@ class ZeroShotSneakerClassifier(EvaluationImageEncoder):
             prompt_template.format(class_name=class_name, label=format_class_label(class_name))
             for class_name in self.class_names
         ]
+        if not self.encoder.supports_text:
+            raise ValueError(
+                "ZeroShotSneakerClassifier requires a text-capable backend. "
+                "Use a checkpoint classifier flow for image-only backends such as ResNet."
+            )
         with torch.no_grad():
             text_tokens = self.encoder.tokenize_texts(self.class_prompts)
             text_features = self.encoder.encode_text_tokens(text_tokens)

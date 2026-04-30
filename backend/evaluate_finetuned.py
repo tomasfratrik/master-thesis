@@ -2,9 +2,11 @@ import argparse
 import json
 from pathlib import Path
 from statistics import mean
+from typing import Any
 
 from tqdm import tqdm
 
+from backend.app.finetuned_classifier_service import FineTunedSneakerClassifier
 from backend.config import TEST_SPLIT_ROOT
 from backend.eval_model import (
     ZeroShotSneakerClassifier,
@@ -16,12 +18,12 @@ from backend.tagging_store import load_tag_index
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Evaluate CLIP classification on a labeled test split."
+        description="Evaluate sneaker classification on a labeled test split."
     )
     parser.add_argument(
         "--checkpoint",
         default=None,
-        help="Optional path to fine-tuned checkpoint. Omit for base-model zero-shot evaluation.",
+        help="Optional path to a fine-tuned checkpoint. Omit for base-model zero-shot evaluation.",
     )
     parser.add_argument(
         "--backend",
@@ -73,10 +75,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def predict_scores(
-    classifier: ZeroShotSneakerClassifier,
+    classifier: Any,
     image_path: Path,
     top_k: int,
 ) -> tuple[list[dict[str, float | str]], float]:
+    if isinstance(classifier, FineTunedSneakerClassifier):
+        result = classifier.predict_image_path(image_path, k=top_k, aggregation="embedding_mean")
+        return result["top_k"], float(result["margin_vs_second"])
+
     return classifier.predict_image_path(image_path, top_k=top_k)
 
 
@@ -131,19 +137,21 @@ def main() -> None:
     dataset_image_keys = {image_path.relative_to(test_root).as_posix() for image_path, _ in dataset}
     unmatched_tag_entries = sorted(set(tag_index) - dataset_image_keys)
 
-    class_names = (
-        load_checkpoint_class_names(checkpoint_path)
-        if checkpoint_path is not None
-        else sorted({class_name for _, class_name in dataset})
-    )
-    classifier = ZeroShotSneakerClassifier(
-        class_names=class_names,
-        prompt_template=args.prompt_template,
-        checkpoint_path=checkpoint_path,
-        backend=args.backend,
-        model_name=args.model_name,
-        pretrained=args.pretrained,
-    )
+    if checkpoint_path is not None:
+        class_names = load_checkpoint_class_names(checkpoint_path)
+        classifier: Any = FineTunedSneakerClassifier(checkpoint_path=checkpoint_path)
+        model_summary = classifier.model_summary()
+    else:
+        class_names = sorted({class_name for _, class_name in dataset})
+        classifier = ZeroShotSneakerClassifier(
+            class_names=class_names,
+            prompt_template=args.prompt_template,
+            checkpoint_path=checkpoint_path,
+            backend=args.backend,
+            model_name=args.model_name,
+            pretrained=args.pretrained,
+        )
+        model_summary = classifier.model_summary()
 
     total = len(dataset)
     top1_correct = 0
@@ -232,7 +240,7 @@ def main() -> None:
         mean_margin_when_wrong = mean(incorrect_margins)
 
     summary = {
-        **classifier.model_summary(),
+        **model_summary,
         "test_root": str(test_root),
         "class_count": len(class_names),
         "class_source": class_source,

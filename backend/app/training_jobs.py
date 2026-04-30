@@ -21,6 +21,7 @@ from .auth import hash_password
 from .catalog_metadata import infer_model_name
 from .config import MODEL_CHECKPOINT, TRAINING_JOBS_DIR, UPLOADS_DIR
 from .db import get_connection, utc_now
+from backend.model_loader import infer_checkpoint_backend, load_checkpoint_metadata
 
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -61,6 +62,27 @@ def _job_output_root(job_id: str) -> Path:
 
 def _job_eval_report_path(job_id: str) -> Path:
     return _job_root(job_id) / "eval_report.json"
+
+
+def _training_module_name(active_checkpoint: str | None) -> str:
+    if active_checkpoint:
+        try:
+            checkpoint_backend = infer_checkpoint_backend(load_checkpoint_metadata(active_checkpoint))
+        except Exception:
+            checkpoint_backend = None
+        if checkpoint_backend == "efficientnet_b0":
+            return "backend.finetune_efficientnet"
+
+    backend_name = os.getenv("SNEAKER_MODEL_BACKEND", "clip")
+    if backend_name == "efficientnet_b0":
+        return "backend.finetune_efficientnet"
+    return "backend.finetune_clip"
+
+
+def _training_checkpoint_names(training_module: str) -> tuple[str, str]:
+    if training_module == "backend.finetune_efficientnet":
+        return "efficientnet_b0_sneaker_best.pt", "efficientnet_b0_sneaker_final.pt"
+    return "clip_sneaker_best.pt", "clip_sneaker_final.pt"
 
 
 def get_active_checkpoint_path() -> str | None:
@@ -496,10 +518,11 @@ def _run_training_job(
         if active_checkpoint:
             env["SNEAKER_MODEL_CHECKPOINT"] = active_checkpoint
 
+        training_module = _training_module_name(active_checkpoint)
         train_command = [
             sys.executable,
             "-m",
-            "backend.finetune_clip",
+            training_module,
             "--data-root",
             str(dataset_root),
             "--batch-size",
@@ -519,8 +542,9 @@ def _run_training_job(
         if return_code != 0:
             raise RuntimeError("Training command failed.")
 
-        best_checkpoint = output_root / "clip_sneaker_best.pt"
-        final_checkpoint = output_root / "clip_sneaker_final.pt"
+        best_checkpoint_name, final_checkpoint_name = _training_checkpoint_names(training_module)
+        best_checkpoint = output_root / best_checkpoint_name
+        final_checkpoint = output_root / final_checkpoint_name
         eval_report = _job_eval_report_path(job_id)
 
         eval_command = [

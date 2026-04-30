@@ -1,7 +1,7 @@
 """
 Sneaker classifier inference service.
 
-Loads the fine-tuned checkpoint, prepares prompts, and returns ranked predictions.
+Loads the fine-tuned checkpoint and returns ranked predictions for supported backends.
 """
 
 import io
@@ -15,7 +15,7 @@ from PIL import Image
 
 from .catalog_metadata import format_class_label
 from backend.config import DEVICE, MODEL_NAME, PREVIEWS_DIR, PREVIEW_LIMIT, PREVIEW_URL_PREFIX
-from backend.model_loader import load_encoder
+from backend.model_loader import load_checkpoint_metadata, load_encoder
 
 
 def _format_class_name(class_name: str) -> str:
@@ -50,6 +50,7 @@ class FineTunedSneakerClassifier:
         if not self.checkpoint_path.exists():
             raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
 
+        checkpoint = load_checkpoint_metadata(self.checkpoint_path)
         self.encoder = load_encoder(
             device=self.device,
             checkpoint_path=self.checkpoint_path,
@@ -58,23 +59,34 @@ class FineTunedSneakerClassifier:
         )
         self.model = self.encoder.model
         self.preprocess = self.encoder.preprocess
-        checkpoint = torch.load(self.checkpoint_path, map_location=self.device)
 
         class_names = checkpoint.get("class_names")
         if not class_names:
             raise ValueError("Checkpoint does not contain class_names.")
 
         self.class_names: list[str] = list(class_names)
-        self.class_prompts = [
-            f"a photo of {_format_class_name(class_name)} sneakers"
-            for class_name in self.class_names
-        ]
-        with torch.no_grad():
-            self.text_tokens = self.encoder.tokenize_texts(self.class_prompts)
-            text_features = self.encoder.encode_text_tokens(self.text_tokens)
-            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-            self.text_features = text_features.float()
+        self.class_prompts: list[str] = []
+        self.text_features: torch.Tensor | None = None
+        if self.encoder.supports_text:
+            self.class_prompts = [
+                f"a photo of {_format_class_name(class_name)} sneakers"
+                for class_name in self.class_names
+            ]
+            with torch.no_grad():
+                self.text_tokens = self.encoder.tokenize_texts(self.class_prompts)
+                text_features = self.encoder.encode_text_tokens(self.text_tokens)
+                text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+                self.text_features = text_features.float()
         self.extra_prototypes: list[dict[str, Any]] = []
+
+    def model_summary(self) -> dict[str, str | None]:
+        """Return the loaded checkpoint model metadata for reports and diagnostics."""
+        return {
+            "backend": self.encoder.backend,
+            "model_name": self.encoder.model_name,
+            "pretrained": getattr(self.encoder, "pretrained", None),
+            "checkpoint": str(self.checkpoint_path),
+        }
 
     @torch.no_grad()
     def _encode_images(self, images: list[Image.Image]) -> torch.Tensor:
@@ -87,8 +99,20 @@ class FineTunedSneakerClassifier:
             for image in images
         ]
         batch = torch.stack(image_tensors, dim=0).to(self.device)
-        image_features = self.encoder.encode_image_tensors(batch)
-        image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+        image_features = self.encoder.encode_image_features(batch, normalize=True)
+        return image_features.float()
+
+    @torch.no_grad()
+    def _encode_classifier_features(self, images: list[Image.Image]) -> torch.Tensor:
+        if not images:
+            raise ValueError("At least one image is required for prediction.")
+
+        image_tensors = [
+            self.preprocess(image.convert("RGB"))
+            for image in images
+        ]
+        batch = torch.stack(image_tensors, dim=0).to(self.device)
+        image_features = self.encoder.encode_image_features(batch, normalize=False)
         return image_features.float()
 
     @staticmethod
@@ -114,10 +138,16 @@ class FineTunedSneakerClassifier:
         return aggregation  # type: ignore[return-value]
 
     def _compute_logits(self, image_features: torch.Tensor) -> torch.Tensor:
+        if self.text_features is None:
+            raise ValueError("Text features are unavailable for this checkpoint backend.")
         return 100.0 * image_features @ self.text_features.T
 
     def set_extra_prototypes(self, items: list[dict[str, Any]]) -> None:
         """Register additional prototype vectors alongside checkpoint classes."""
+        if not self.encoder.supports_text:
+            raise NotImplementedError(
+                "Extra prototypes are only supported for text-similarity classifier backends."
+            )
         normalized: list[dict[str, Any]] = []
         for item in items:
             feature = item["feature"]
@@ -174,6 +204,8 @@ class FineTunedSneakerClassifier:
         extra_prototypes: list[dict[str, Any]] | None = None,
     ) -> tuple[torch.Tensor, list[dict[str, Any]]]:
         """Assemble the feature matrix and metadata for ranked candidates."""
+        if self.text_features is None:
+            raise ValueError("Candidate-space assembly is only available for text classifier backends.")
         metadata = [
             {
                 "class_name": class_name,
@@ -280,17 +312,40 @@ class FineTunedSneakerClassifier:
     ) -> dict[str, Any]:
         """Predict sneaker classes for one or more views of the same item."""
         aggregation = self._validate_aggregation(aggregation)
-        image_features = self._encode_images(images)
-        candidate_features, candidate_metadata = self._candidate_space(extra_prototypes)
-        if aggregation == "embedding_mean":
-            aggregated_features = self._aggregate_features(image_features)
-            probabilities = (100.0 * aggregated_features @ candidate_features.T).softmax(dim=-1)[0]
-        else:
-            logits = 100.0 * image_features @ candidate_features.T
-            if aggregation == "logit_mean":
-                probabilities = logits.mean(dim=0).softmax(dim=-1)
+        candidate_metadata = [
+            {
+                "class_name": class_name,
+                "label": _format_class_name(class_name),
+                "prompt": None if not self.encoder.supports_text else prompt,
+                "preview_urls": _preview_urls(class_name),
+                "candidate_type": "checkpoint",
+            }
+            for class_name, prompt in zip(self.class_names, self.class_prompts or [None] * len(self.class_names))
+        ]
+        if self.encoder.supports_text:
+            image_features = self._encode_images(images)
+            candidate_features, candidate_metadata = self._candidate_space(extra_prototypes)
+            if aggregation == "embedding_mean":
+                aggregated_features = self._aggregate_features(image_features)
+                probabilities = (100.0 * aggregated_features @ candidate_features.T).softmax(dim=-1)[0]
             else:
-                probabilities = logits.softmax(dim=-1).mean(dim=0)
+                logits = 100.0 * image_features @ candidate_features.T
+                if aggregation == "logit_mean":
+                    probabilities = logits.mean(dim=0).softmax(dim=-1)
+                else:
+                    probabilities = logits.softmax(dim=-1).mean(dim=0)
+        else:
+            classifier_features = self._encode_classifier_features(images)
+            if aggregation == "embedding_mean":
+                aggregated_features = classifier_features.mean(dim=0, keepdim=True)
+                logits = self.encoder.classify_image_features(aggregated_features)
+                probabilities = logits.softmax(dim=-1)[0]
+            else:
+                logits = self.encoder.classify_image_features(classifier_features)
+                if aggregation == "logit_mean":
+                    probabilities = logits.mean(dim=0).softmax(dim=-1)
+                else:
+                    probabilities = logits.softmax(dim=-1).mean(dim=0)
         return self._build_prediction_result(
             probabilities=probabilities,
             candidate_metadata=candidate_metadata,
