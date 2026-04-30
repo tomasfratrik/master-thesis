@@ -33,6 +33,12 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 device = DEVICE
 
 
+def best_checkpoint_path_for_epoch(epoch: int) -> Path:
+    return BEST_CHECKPOINT_PATH.with_name(
+        f"{BEST_CHECKPOINT_PATH.stem}_epoch_{epoch}{BEST_CHECKPOINT_PATH.suffix}"
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fine-tune CLIP on sneaker classes with train/val/test splits."
@@ -375,20 +381,21 @@ def train(args: argparse.Namespace) -> None:
 
         if monitor_loss < best_metric:
             best_metric = monitor_loss
-            torch.save(
-                {
-                    "epoch": epoch + 1,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "loss": monitor_loss,
-                    "class_names": train_dataset.class_names,
-                    "train_root": str(train_root),
-                    "val_root": None if val_root is None else str(val_root),
-                    "test_root": None if test_root is None else str(test_root),
-                },
-                BEST_CHECKPOINT_PATH,
-            )
-            print(f"Saved best model to {BEST_CHECKPOINT_PATH} (loss={monitor_loss:.4f})")
+            best_epoch_path = best_checkpoint_path_for_epoch(epoch + 1)
+            checkpoint_payload = {
+                "epoch": epoch + 1,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "loss": monitor_loss,
+                "class_names": train_dataset.class_names,
+                "train_root": str(train_root),
+                "val_root": None if val_root is None else str(val_root),
+                "test_root": None if test_root is None else str(test_root),
+            }
+            torch.save(checkpoint_payload, best_epoch_path)
+            torch.save(checkpoint_payload, BEST_CHECKPOINT_PATH)
+            print(f"Saved best model to {best_epoch_path} (loss={monitor_loss:.4f})")
+            print(f"Updated stable best checkpoint alias at {BEST_CHECKPOINT_PATH}")
 
     final_metrics = evaluate(model, test_dataloader, class_tokens) if test_dataloader else None
 

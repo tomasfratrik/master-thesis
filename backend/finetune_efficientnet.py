@@ -35,6 +35,11 @@ DEFAULT_WEIGHT_DECAY = 1e-4
 device = DEVICE
 
 
+def best_checkpoint_path_for_epoch(epoch: int) -> Path:
+    """Return the epoch-specific path for the currently best checkpoint."""
+    return FINETUNE_OUTPUT_DIR / f"efficientnet_b0_sneaker_best_epoch_{epoch}.pt"
+
+
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for EfficientNet sneaker fine-tuning."""
     parser = argparse.ArgumentParser(
@@ -398,6 +403,18 @@ def train(args: argparse.Namespace) -> None:
 
         if monitor_loss < best_metric:
             best_metric = monitor_loss
+            best_epoch_path = best_checkpoint_path_for_epoch(epoch + 1)
+            _save_checkpoint(
+                best_epoch_path,
+                epoch=epoch + 1,
+                model=model,
+                optimizer=optimizer,
+                monitor_loss=monitor_loss,
+                train_dataset=train_dataset,
+                train_root=train_root,
+                val_root=val_root,
+                test_root=test_root,
+            )
             _save_checkpoint(
                 BEST_CHECKPOINT_PATH,
                 epoch=epoch + 1,
@@ -409,7 +426,8 @@ def train(args: argparse.Namespace) -> None:
                 val_root=val_root,
                 test_root=test_root,
             )
-            print(f"Saved best model to {BEST_CHECKPOINT_PATH} (loss={monitor_loss:.4f})")
+            print(f"Saved best model to {best_epoch_path} (loss={monitor_loss:.4f})")
+            print(f"Updated stable best checkpoint alias at {BEST_CHECKPOINT_PATH}")
 
     final_metrics = evaluate(model, test_dataloader)
     _save_checkpoint(
