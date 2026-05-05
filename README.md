@@ -206,3 +206,41 @@ RuntimeOptions(
 
 Valid step names are `normalize_format`, `crop_sneakers`, `resize_limit`, and
 `grayscale`.
+
+## Training Graphs
+
+Fine-tuning writes a training-history JSON file, for example:
+
+```text
+artifacts/finetuned_models/efficientnet_b0_training_history.json
+```
+
+Render loss, validation accuracy, and learning-rate graphs with:
+
+```bash
+./venv/bin/python -m backend.plot_training_history \
+  artifacts/finetuned_models/efficientnet_b0_training_history.json \
+  --output-dir artifacts/training_plots \
+  --prefix efficientnet_b0
+```
+
+Or through Make:
+
+```bash
+make plot-training HISTORY=artifacts/finetuned_models/efficientnet_b0_training_history.json
+```
+
+The command writes PNG files for loss, validation accuracy, and learning rate.
+The accuracy graph always uses a fixed `0..1` y-axis.
+
+To compare two runs in the same plots, pass multiple history files and labels:
+
+```bash
+./venv/bin/python -m backend.plot_training_history \
+  artifacts/run_a/training_history.json \
+  artifacts/run_b/training_history.json \
+  --label clip \
+  --label efficientnet \
+  --output-dir artifacts/training_plots \
+  --prefix clip_vs_efficientnet
+```
