@@ -180,3 +180,29 @@ Optional settings:
 ```
 
 Use `--return-original-if-empty` to save the original image when no sneaker crop is detected.
+
+## Preprocessing Order
+
+The backend preprocessing pipeline runs these steps by default:
+
+```text
+normalize_format -> crop_sneakers -> resize_limit -> grayscale
+```
+
+The default is defined in `backend/app/preprocess_service/config.py` as
+`PreprocessConfig.step_order`. The order can also be overridden per request with
+`RuntimeOptions.step_order`:
+
+```python
+RuntimeOptions(
+    step_order=[
+        "normalize_format",
+        "crop_sneakers",
+        "resize_limit",
+        "grayscale",
+    ]
+)
+```
+
+Valid step names are `normalize_format`, `crop_sneakers`, `resize_limit`, and
+`grayscale`.

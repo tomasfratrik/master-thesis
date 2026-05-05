@@ -85,6 +85,7 @@ class CropSneakersRuntimeConfig(BaseModel):
 
 
 class RuntimeOptions(BaseModel):
+    step_order: list[str] = Field(default_factory=list)
     enabled_steps: list[str] = Field(default_factory=list)
     disabled_steps: list[str] = Field(default_factory=list)
     include_images: bool = True
@@ -119,6 +120,14 @@ class RuntimeOptions(BaseModel):
 
 
 class PreprocessConfig(BaseModel):
+    step_order: list[str] = Field(
+        default_factory=lambda: [
+            "normalize_format",
+            "crop_sneakers",
+            "resize_limit",
+            "grayscale",
+        ]
+    )
     normalize_format: NormalizeFormatConfig = Field(
         default_factory=NormalizeFormatConfig
     )
