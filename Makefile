@@ -1,5 +1,5 @@
 
-.PHONY: install freeze run run-app-backend docker-build docker-predict docker-up eval-finetuned plot-training seed-previews
+.PHONY: install freeze run run-app-backend docker-build docker-predict docker-up eval-finetuned plot-training plot-training-diagnostics plot-eval seed-previews
 
 run:
 	source venv/bin/activate
@@ -18,6 +18,8 @@ help:
 	@echo "  make docker-predict IMAGE=path/to/image.jpg - Run prediction in Docker"
 	@echo "  make eval-finetuned CHECKPOINT=... TEST_ROOT=... - Evaluate checkpoint on labeled test split"
 	@echo "  make plot-training HISTORY='a.json [b.json ...]' - Render training loss/accuracy graphs"
+	@echo "  make plot-training-diagnostics HISTORY=a.json - Render underfit/overfit diagnostics"
+	@echo "  make plot-eval REPORTS='a.json [b.json ...]' - Render evaluation comparison graphs"
 	@echo "  make seed-previews SOURCE_ROOT=... - Copy sample preview images per class"
 
 freeze:
@@ -44,6 +46,12 @@ eval-finetuned:
 
 plot-training:
 	./venv/bin/python -m backend.plot_training_history $(HISTORY) --output-dir artifacts/training_plots
+
+plot-training-diagnostics:
+	./venv/bin/python -m backend.plot_training_diagnostics $(HISTORY) --output-dir artifacts/training_plots
+
+plot-eval:
+	./venv/bin/python -m backend.plot_eval_results $(REPORTS) --output-dir artifacts/eval_plots
 
 seed-previews:
 	./venv/bin/python -m backend.seed_previews --source-root $(SOURCE_ROOT)

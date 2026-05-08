@@ -233,6 +233,42 @@ make plot-training HISTORY=artifacts/finetuned_models/efficientnet_b0_training_h
 The command writes PNG files for loss, validation accuracy, and learning rate.
 The accuracy graph always uses a fixed `0..1` y-axis.
 
+To make an underfitting/overfitting figure, render the diagnostics plot:
+
+```bash
+./venv/bin/python -m backend.plot_training_diagnostics \
+  artifacts/finetuned_models/efficientnet_b0_training_history.json \
+  --output-dir artifacts/training_plots \
+  --prefix efficientnet_b0
+```
+
+This writes `efficientnet_b0_diagnostics.png`. The plot marks the early
+underfit checkpoint candidate, the best validation epoch, the final checkpoint,
+and shows whether the validation loss starts getting worse while the training
+loss continues to decrease.
+
+For thesis visual comparisons, train with epoch checkpoints enabled:
+
+```bash
+./venv/bin/python -m backend.finetune_efficientnet \
+  --data-root path/to/sneakers-mixed \
+  --epochs 30 \
+  --checkpoint-every 1
+```
+
+The same option is available for CLIP fine-tuning:
+
+```bash
+./venv/bin/python -m backend.finetune_clip \
+  --data-root path/to/sneakers-mixed \
+  --epochs 30 \
+  --checkpoint-every 1
+```
+
+Use the diagnostics plot to choose an early underfit checkpoint, the best
+checkpoint, and a late/final overfit checkpoint. Then run Grad-CAM or feature
+channels on the same image for each checkpoint.
+
 To compare two runs in the same plots, pass multiple history files and labels:
 
 ```bash
@@ -244,3 +280,47 @@ To compare two runs in the same plots, pass multiple history files and labels:
   --output-dir artifacts/training_plots \
   --prefix clip_vs_efficientnet
 ```
+
+## Evaluation Graphs
+
+Tagged evaluation JSON reports can be visualized with:
+
+```bash
+./venv/bin/python -m backend.plot_eval_results \
+  artifacts/finetuned_models/final/tests/eval_clip_sneakers-mixed_best.json \
+  artifacts/finetuned_models/final/tests/eval_efficientnet_b0_sneaker-mixed_best.json \
+  --label clip_mixed \
+  --label efficientnet_mixed \
+  --output-dir artifacts/eval_plots \
+  --prefix mixed_comparison
+```
+
+The command writes:
+
+```text
+mixed_comparison_summary.png
+mixed_comparison_per_tag_top1_accuracy.png
+mixed_comparison_per_class_top1_accuracy.png
+```
+
+Use `--metric topk_accuracy` to render per-tag and per-class top-k graphs instead.
+
+For older reports without tags, render only the summary comparison:
+
+```bash
+./venv/bin/python -m backend.plot_eval_results \
+  artifacts/eval_finetuned_report.json \
+  artifacts/eval_subset1.json \
+  artifacts/finetuned_models/final/tests/eval_clip_sneakers-mixed_best.json \
+  artifacts/finetuned_models/final/tests/eval_efficientnet_b0_sneaker-mixed_best.json \
+  --label clip_142class \
+  --label clip_13_oldtest \
+  --label final_clip \
+  --label final_effnet \
+  --output-dir artifacts/eval_plots \
+  --prefix old_vs_final \
+  --summary-only
+```
+
+The summary plot intentionally compares `top1_accuracy` and
+`mean_margin_vs_second`, not top-k accuracy.

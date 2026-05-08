@@ -40,6 +40,11 @@ def best_checkpoint_path_for_epoch(epoch: int) -> Path:
     return FINETUNE_OUTPUT_DIR / f"efficientnet_b0_sneaker_best_epoch_{epoch}.pt"
 
 
+def checkpoint_path_for_epoch(epoch: int) -> Path:
+    """Return a regular epoch checkpoint path for visual diagnostics."""
+    return FINETUNE_OUTPUT_DIR / f"efficientnet_b0_sneaker_epoch_{epoch}.pt"
+
+
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments for EfficientNet sneaker fine-tuning."""
     parser = argparse.ArgumentParser(
@@ -83,6 +88,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional EfficientNet checkpoint to continue training from.",
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=0,
+        help=(
+            "Save a regular epoch checkpoint every N epochs. "
+            "Use 1 when you want underfit/best/overfit checkpoints for visualizations."
+        ),
     )
     return parser.parse_args()
 
@@ -351,6 +365,7 @@ def train(args: argparse.Namespace) -> None:
     print(f"  Learning rate: {args.learning_rate}")
     print(f"  Warmup epochs: {args.warmup_epochs}")
     print(f"  Weight decay: {args.weight_decay}")
+    print(f"  Checkpoint every: {args.checkpoint_every}")
     print("=" * 70 + "\n")
 
     for epoch in range(args.epochs):
@@ -428,6 +443,21 @@ def train(args: argparse.Namespace) -> None:
             )
             print(f"Saved best model to {best_epoch_path} (loss={monitor_loss:.4f})")
             print(f"Updated stable best checkpoint alias at {BEST_CHECKPOINT_PATH}")
+
+        if args.checkpoint_every > 0 and (epoch + 1) % args.checkpoint_every == 0:
+            epoch_path = checkpoint_path_for_epoch(epoch + 1)
+            _save_checkpoint(
+                epoch_path,
+                epoch=epoch + 1,
+                model=model,
+                optimizer=optimizer,
+                monitor_loss=monitor_loss,
+                train_dataset=train_dataset,
+                train_root=train_root,
+                val_root=val_root,
+                test_root=test_root,
+            )
+            print(f"Saved epoch checkpoint to {epoch_path}")
 
     final_metrics = evaluate(model, test_dataloader)
     _save_checkpoint(

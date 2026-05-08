@@ -39,6 +39,12 @@ def best_checkpoint_path_for_epoch(epoch: int) -> Path:
     )
 
 
+def checkpoint_path_for_epoch(epoch: int) -> Path:
+    return FINAL_CHECKPOINT_PATH.with_name(
+        f"{FINAL_CHECKPOINT_PATH.stem}_epoch_{epoch}{FINAL_CHECKPOINT_PATH.suffix}"
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Fine-tune CLIP on sneaker classes with train/val/test splits."
@@ -81,6 +87,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Optional fine-tuned checkpoint to continue training from.",
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=0,
+        help=(
+            "Save a regular epoch checkpoint every N epochs. "
+            "Use 1 when you want underfit/best/overfit checkpoints for visualizations."
+        ),
     )
     return parser.parse_args()
 
@@ -226,6 +241,33 @@ def evaluate(model, dataloader: DataLoader, class_tokens: torch.Tensor) -> dict[
     }
 
 
+def save_checkpoint(
+    path: Path,
+    *,
+    epoch: int,
+    model,
+    optimizer: optim.Optimizer,
+    monitor_loss: float,
+    train_dataset: SneakerDataset,
+    train_root: Path,
+    val_root: Path | None,
+    test_root: Path | None,
+) -> None:
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "loss": monitor_loss,
+            "class_names": train_dataset.class_names,
+            "train_root": str(train_root),
+            "val_root": None if val_root is None else str(val_root),
+            "test_root": None if test_root is None else str(test_root),
+        },
+        path,
+    )
+
+
 def train(args: argparse.Namespace) -> None:
     train_root, val_root, test_root = resolve_dataset_roots(args)
     print(f"Using device: {device}")
@@ -323,6 +365,7 @@ def train(args: argparse.Namespace) -> None:
     print(f"  Learning rate: {args.learning_rate}")
     print(f"  Warmup epochs: {args.warmup_epochs}")
     print(f"  Weight decay: {args.weight_decay}")
+    print(f"  Checkpoint every: {args.checkpoint_every}")
     print("=" * 70 + "\n")
 
     for epoch in range(args.epochs):
@@ -382,35 +425,58 @@ def train(args: argparse.Namespace) -> None:
         if monitor_loss < best_metric:
             best_metric = monitor_loss
             best_epoch_path = best_checkpoint_path_for_epoch(epoch + 1)
-            checkpoint_payload = {
-                "epoch": epoch + 1,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "loss": monitor_loss,
-                "class_names": train_dataset.class_names,
-                "train_root": str(train_root),
-                "val_root": None if val_root is None else str(val_root),
-                "test_root": None if test_root is None else str(test_root),
-            }
-            torch.save(checkpoint_payload, best_epoch_path)
-            torch.save(checkpoint_payload, BEST_CHECKPOINT_PATH)
+            save_checkpoint(
+                best_epoch_path,
+                epoch=epoch + 1,
+                model=model,
+                optimizer=optimizer,
+                monitor_loss=monitor_loss,
+                train_dataset=train_dataset,
+                train_root=train_root,
+                val_root=val_root,
+                test_root=test_root,
+            )
+            save_checkpoint(
+                BEST_CHECKPOINT_PATH,
+                epoch=epoch + 1,
+                model=model,
+                optimizer=optimizer,
+                monitor_loss=monitor_loss,
+                train_dataset=train_dataset,
+                train_root=train_root,
+                val_root=val_root,
+                test_root=test_root,
+            )
             print(f"Saved best model to {best_epoch_path} (loss={monitor_loss:.4f})")
             print(f"Updated stable best checkpoint alias at {BEST_CHECKPOINT_PATH}")
 
+        if args.checkpoint_every > 0 and (epoch + 1) % args.checkpoint_every == 0:
+            epoch_path = checkpoint_path_for_epoch(epoch + 1)
+            save_checkpoint(
+                epoch_path,
+                epoch=epoch + 1,
+                model=model,
+                optimizer=optimizer,
+                monitor_loss=monitor_loss,
+                train_dataset=train_dataset,
+                train_root=train_root,
+                val_root=val_root,
+                test_root=test_root,
+            )
+            print(f"Saved epoch checkpoint to {epoch_path}")
+
     final_metrics = evaluate(model, test_dataloader, class_tokens) if test_dataloader else None
 
-    torch.save(
-        {
-            "epoch": args.epochs,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "loss": best_metric,
-            "class_names": train_dataset.class_names,
-            "train_root": str(train_root),
-            "val_root": None if val_root is None else str(val_root),
-            "test_root": None if test_root is None else str(test_root),
-        },
+    save_checkpoint(
         FINAL_CHECKPOINT_PATH,
+        epoch=args.epochs,
+        model=model,
+        optimizer=optimizer,
+        monitor_loss=best_metric,
+        train_dataset=train_dataset,
+        train_root=train_root,
+        val_root=val_root,
+        test_root=test_root,
     )
 
     with open(TRAINING_HISTORY_PATH, "w", encoding="utf-8") as file:
