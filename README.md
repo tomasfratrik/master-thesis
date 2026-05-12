@@ -348,3 +348,11 @@ The summary plot intentionally compares `top1_accuracy` and
 - Extra thesis files, datasets, tests, and graphs: https://github.com/tomasfratrik/thesis-others
 - Runtime assets used by Docker bootstrap: https://github.com/tomasfratrik/thesis-runtime-assets
 - Model checkpoint repository: https://huggingface.co/tomasfratrik/thesis-model/tree/main
+
+## License
+
+The source code in this repository is intended to be licensed under the MIT License.
+
+Datasets, model checkpoints, runtime assets, sneaker images, and third-party assets may have
+separate ownership or usage restrictions. They are not covered by this repository license unless
+explicitly stated.
