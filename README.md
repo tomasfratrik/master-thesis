@@ -1,6 +1,8 @@
 # Master Thesis Sneaker Matcher
 
 Docker is the primary installation and runtime path for this project.
+GPU inference is much faster than CPU inference. A single analysis can take about 1 second on GPU,
+while CPU inference can take 10 seconds or more depending on the machine.
 
 ## Prerequisites
 
@@ -79,6 +81,10 @@ This works on any machine with Docker and does not require NVIDIA container supp
 
 GPU mode is optional and should only be used if the host machine is already configured for
 NVIDIA containers.
+
+If you want GPU acceleration but do not want to configure Docker with NVIDIA drivers and the
+NVIDIA Container Toolkit, use the manual local installation instead. In that setup, the application
+uses the CUDA/PyTorch environment already installed on the host machine.
 
 If your host already has:
 - NVIDIA drivers

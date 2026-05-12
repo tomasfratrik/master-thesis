@@ -10,6 +10,7 @@ venv-install:
 
 help:
 	@echo "Available commands:"
+	@echo "  Note: GPU inference is much faster. Analysis can take about 1 second on GPU and 10+ seconds on CPU."
 	@echo "  make freeze   - Freeze current Python dependencies into requirements.txt"
 	@echo "  make install  - Install packages from requirements.txt"
 	@echo "  make run-app-backend - Run the catalog/backend API"
