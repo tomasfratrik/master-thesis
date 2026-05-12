@@ -39,6 +39,9 @@ Optionally if you want to use your model/assets copy `.env.example` to `.env` an
 - `RUNTIME_ASSETS_REPO_URL`
 - `MODEL_REPO_URL`
 
+The default Docker setup uses the CPU backend image. This image installs CPU-only PyTorch
+dependencies, so the build is smaller and faster than the GPU image.
+
 Start the full project:
 
 ```bash
@@ -81,6 +84,9 @@ This works on any machine with Docker and does not require NVIDIA container supp
 
 GPU mode is optional and should only be used if the host machine is already configured for
 NVIDIA containers.
+The GPU Docker setup uses a separate image with CUDA/PyTorch dependencies. This image is
+larger, so the dependency installation and final Docker image export can take much longer than
+the default CPU build.
 
 If you want GPU acceleration but do not want to configure Docker with NVIDIA drivers and the
 NVIDIA Container Toolkit, use the manual local installation instead. In that setup, the application
@@ -114,6 +120,12 @@ After Docker GPU access works, start the project in GPU mode:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+```
+
+Or through Make:
+
+```bash
+make docker-up-gpu
 ```
 
 This project does not install NVIDIA drivers or the NVIDIA container runtime for you.

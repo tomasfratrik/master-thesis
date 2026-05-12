@@ -11,10 +11,8 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY requirements-docker-cpu.txt /app/requirements-docker-cpu.txt
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0 torchvision==0.25.0 \
-    && pip install -r /app/requirements-docker-cpu.txt
+COPY requirements.txt /app/requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r /app/requirements.txt
 
 COPY . /app
 RUN chmod +x /app/scripts/bootstrap-and-run-backend.sh

@@ -1,5 +1,5 @@
 
-.PHONY: install freeze run run-app-backend docker-build docker-predict docker-up eval-finetuned plot-training plot-training-diagnostics plot-eval seed-previews
+.PHONY: install freeze run run-app-backend docker-build docker-predict docker-up docker-up-gpu eval-finetuned plot-training plot-training-diagnostics plot-eval seed-previews
 
 run:
 	source venv/bin/activate
@@ -16,6 +16,7 @@ help:
 	@echo "  make run-app-backend - Run the catalog/backend API"
 	@echo "  make docker-build - Build prediction image"
 	@echo "  make docker-up - Start backend and frontend with Docker Compose"
+	@echo "  make docker-up-gpu - Start backend and frontend with Docker Compose GPU runtime"
 	@echo "  make docker-predict IMAGE=path/to/image.jpg - Run prediction in Docker"
 	@echo "  make eval-finetuned CHECKPOINT=... TEST_ROOT=... - Evaluate checkpoint on labeled test split"
 	@echo "  make plot-training HISTORY='a.json [b.json ...]' - Render training loss/accuracy graphs"
@@ -38,6 +39,9 @@ docker-build:
 
 docker-up:
 	docker compose up --build
+
+docker-up-gpu:
+	docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 
 docker-predict:
 	docker run --rm -v $(PWD)/artifacts:/app/artifacts -v $(PWD):/workspace sneaker-labeler:latest --image /workspace/$(IMAGE)
