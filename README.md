@@ -342,3 +342,9 @@ For older reports without tags, render only the summary comparison:
 
 The summary plot intentionally compares `top1_accuracy` and
 `mean_margin_vs_second`, not top-k accuracy.
+
+## Related Repositories
+
+- Extra thesis files, datasets, tests, and graphs: https://github.com/tomasfratrik/thesis-others
+- Runtime assets used by Docker bootstrap: https://github.com/tomasfratrik/thesis-runtime-assets
+- Model checkpoint repository: https://huggingface.co/tomasfratrik/thesis-model/tree/main
