@@ -87,6 +87,9 @@ def _training_checkpoint_names(training_module: str) -> tuple[str, str]:
 
 def get_active_checkpoint_path() -> str | None:
     """Return the checkpoint currently marked as active for inference."""
+    if MODEL_CHECKPOINT:
+        return MODEL_CHECKPOINT
+
     with get_connection() as connection:
         row = connection.execute(
             "SELECT value FROM app_settings WHERE key = ?",
@@ -94,7 +97,7 @@ def get_active_checkpoint_path() -> str | None:
         ).fetchone()
     if row is not None and row["value"]:
         return row["value"]
-    return MODEL_CHECKPOINT
+    return None
 
 
 def set_active_checkpoint_path(path: str) -> None:
