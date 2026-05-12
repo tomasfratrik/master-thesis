@@ -6,11 +6,83 @@
 		{ value: 'embedding_mean', label: 'Embedding mean', note: 'Average image embeddings before classification.' },
 		{ value: 'prob_mean', label: 'Probability mean', note: 'Average per-image class probabilities.' }
 	];
+	const demoSamples = [
+		{
+			id: 'air_force_1_low_side',
+			label: 'Air Force 1 Low',
+			note: 'side view',
+			src: '/demo-sneakers/air_force_1_low_side.jpg'
+		},
+		{
+			id: 'air_force_1_low_back',
+			label: 'Air Force 1 Low',
+			note: 'back view',
+			src: '/demo-sneakers/air_force_1_low_back.jpg'
+		},
+		{
+			id: 'court_borough_side',
+			label: 'Court Borough',
+			note: 'side view',
+			src: '/demo-sneakers/court_borough_side.jpg'
+		},
+		{
+			id: 'dunk_high_side',
+			label: 'Dunk High',
+			note: 'side view',
+			src: '/demo-sneakers/dunk_high_side.jpg'
+		},
+		{
+			id: 'gamma_force_back',
+			label: 'Gamma Force',
+			note: 'back view',
+			src: '/demo-sneakers/gamma_force_back.jpg'
+		},
+		{
+			id: 'gamma_force_front',
+			label: 'Gamma Force',
+			note: 'front view',
+			src: '/demo-sneakers/gamma_force_front.jpg'
+		},
+		{
+			id: 'gamma_force_side',
+			label: 'Gamma Force',
+			note: 'side view',
+			src: '/demo-sneakers/gamma_force_side.jpg'
+		},
+		{
+			id: 'gamma_force_top',
+			label: 'Gamma Force',
+			note: 'top view',
+			src: '/demo-sneakers/gamma_force_top.jpg'
+		},
+		{
+			id: 'gamma_force_wrong_front',
+			label: 'Gamma Force',
+			note: 'hard front view',
+			helper: 'Wrong when used alone',
+			src: '/demo-sneakers/gamma_force_wrong_front.jpg'
+		},
+		{
+			id: 'gamma_force_wrong_subset',
+			label: 'Gamma Force',
+			note: 'hard mixed image',
+			helper: 'Wrong when used alone',
+			src: '/demo-sneakers/gamma_force_wrong_subset.jpg'
+		},
+		{
+			id: 'ispa_universal_side',
+			label: 'ISPA Universal',
+			note: 'side view',
+			src: '/demo-sneakers/ispa_universal_side.jpg'
+		}
+	];
 	let mode = 'grouped';
 	let aggregation = 'logit_mean';
 	let selectedFiles = [];
 	let filePreviews = [];
 	let loading = false;
+	let sampleLoadingId = '';
+	let showDemoImages = false;
 	let error = '';
 	let response = null;
 	let expandedPreviewKeys = new Set();
@@ -66,6 +138,31 @@
 		expandedPreviewKeys = new Set();
 		expandedTopKKeys = new Set();
 		expandedMetadataKeys = new Set();
+	}
+
+	async function loadDemoSample(sample) {
+		sampleLoadingId = sample.id;
+		error = '';
+		try {
+			const res = await fetch(sample.src);
+			if (!res.ok) {
+				throw new Error('Sample image could not be loaded.');
+			}
+			const blob = await res.blob();
+			const file = new File([blob], `${sample.id}.jpg`, {
+				type: blob.type || 'image/jpeg',
+				lastModified: Date.now()
+			});
+			updateFiles([file], true);
+		} catch (err) {
+			if (err && err.message) {
+				error = err.message;
+			} else {
+				error = 'Sample image could not be loaded.';
+			}
+		} finally {
+			sampleLoadingId = '';
+		}
 	}
 
 	function removeFile(index) {
@@ -368,6 +465,48 @@
 					</span>
 				</div>
 			</label>
+
+			<div class="sample-block">
+				<div class="sample-head">
+					<div>
+						<p class="eyebrow">Demo Images</p>
+						<p>Use one of the built-in test images if you do not have a sneaker photo.</p>
+					</div>
+					<button class="button ghost compact" type="button" onclick={() => (showDemoImages = !showDemoImages)}>
+						{showDemoImages ? 'Hide samples' : 'Show samples'}
+					</button>
+				</div>
+				{#if showDemoImages}
+					<div class="sample-scroll" aria-label="Demo sneaker images">
+						{#each demoSamples as sample}
+							<figure class="sample-card">
+								<button
+									class="sample-image-button"
+									type="button"
+									onclick={() => openLightbox(sample.src, `${sample.label} ${sample.note}`)}
+								>
+									<img src={sample.src} alt={`${sample.label} ${sample.note}`} />
+								</button>
+								<figcaption>
+									<strong>{sample.label}</strong>
+									<span>{sample.note}</span>
+									{#if sample.helper}
+										<small>{sample.helper}</small>
+									{/if}
+									<button
+										class="button ghost compact sample-use"
+										type="button"
+										disabled={sampleLoadingId === sample.id}
+										onclick={() => loadDemoSample(sample)}
+									>
+										{sampleLoadingId === sample.id ? 'Loading...' : 'Use sample'}
+									</button>
+								</figcaption>
+							</figure>
+						{/each}
+					</div>
+				{/if}
+			</div>
 
 			{#if filePreviews.length > 0}
 				<div class="upload-preview-grid">
@@ -855,6 +994,97 @@
 		margin-top: 0.45rem;
 		color: var(--site-text-soft);
 		line-height: 1.5;
+	}
+
+	.sample-block {
+		margin-top: 1.1rem;
+		padding: 1rem;
+		border: 1px solid rgba(77, 58, 46, 0.12);
+		border-radius: 12px;
+		background: rgba(255, 252, 247, 0.72);
+	}
+
+	.sample-head {
+		display: flex;
+		justify-content: space-between;
+		gap: 1rem;
+		align-items: start;
+	}
+
+	.sample-head p {
+		margin: 0.2rem 0 0;
+		color: var(--site-text-muted);
+		font-size: 0.9rem;
+	}
+
+	.sample-scroll {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+		gap: 0.75rem;
+		margin-top: 0.85rem;
+		max-height: 430px;
+		padding: 0.1rem 0.35rem 0.75rem 0;
+		overflow-y: auto;
+		overscroll-behavior-block: contain;
+	}
+
+	.sample-card {
+		display: grid;
+		gap: 0.55rem;
+		margin: 0;
+		padding: 0.55rem;
+		border: 1px solid rgba(77, 58, 46, 0.1);
+		border-radius: 10px;
+		background: rgba(255, 255, 255, 0.58);
+	}
+
+	.sample-image-button {
+		display: grid;
+		place-items: center;
+		width: 100%;
+		height: 104px;
+		padding: 0;
+		overflow: hidden;
+		border: none;
+		border-radius: 8px;
+		background: linear-gradient(135deg, rgba(245, 239, 231, 0.96), rgba(232, 220, 205, 0.96));
+		cursor: pointer;
+	}
+
+	.sample-image-button img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
+	}
+
+	.sample-card figcaption {
+		display: grid;
+		gap: 0.15rem;
+		min-height: 2.5rem;
+	}
+
+	.sample-card figcaption strong {
+		font-size: 0.85rem;
+		line-height: 1.15;
+	}
+
+	.sample-card figcaption span {
+		color: var(--site-text-muted);
+		font-size: 0.76rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+
+	.sample-card figcaption small {
+		color: #9a4a2d;
+		font-size: 0.74rem;
+		font-weight: 700;
+		line-height: 1.25;
+	}
+
+	.sample-use {
+		justify-content: center;
+		width: 100%;
 	}
 
 	.upload-preview-grid {
