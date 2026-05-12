@@ -53,6 +53,17 @@ copy_if_present() {
     cp -a "$source_dir/." "$target_dir/"
 }
 
+copy_file_if_present() {
+    source_file="$1"
+    target_file="$2"
+    if [ ! -f "$source_file" ]; then
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$target_file")"
+    cp "$source_file" "$target_file"
+}
+
 bootstrap_runtime_assets() {
     if ! runtime_assets_missing; then
         return 0
@@ -65,6 +76,9 @@ bootstrap_runtime_assets() {
     copy_if_present "$RUNTIME_ASSETS_CACHE_DIR/app_data" "$APP_DIR/app_data"
     copy_if_present "$RUNTIME_ASSETS_CACHE_DIR/artifacts" "$APP_DIR/artifacts"
     copy_if_present "$RUNTIME_ASSETS_CACHE_DIR/previews" "$APP_DIR/previews"
+    copy_file_if_present "$RUNTIME_ASSETS_CACHE_DIR/app.sqlite3" "$APP_DIR/app_data/app.sqlite3"
+    copy_file_if_present "$RUNTIME_ASSETS_CACHE_DIR/image_embeddings.npy" "$APP_DIR/artifacts/image_embeddings.npy"
+    copy_file_if_present "$RUNTIME_ASSETS_CACHE_DIR/image_meta.json" "$APP_DIR/artifacts/image_meta.json"
 }
 
 resolve_checkpoint_path() {
